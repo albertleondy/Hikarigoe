@@ -174,6 +174,19 @@ app.get(/(.*)/, (req, res) => {
     res.sendFile(path.join(__dirname, 'client/dist', 'index.html'));
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-});
+function startServer() {
+    return new Promise((resolve, reject) => {
+        const server = app.listen(PORT, () => {
+            console.log(`Server running on http://localhost:${PORT}`);
+            resolve(server);
+        });
+        server.on('error', reject);
+    });
+}
+
+// Only start if run directly
+if (require.main === module) {
+    startServer();
+}
+
+module.exports = { startServer, app };

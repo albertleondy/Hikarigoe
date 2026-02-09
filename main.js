@@ -1,9 +1,8 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const { startServer } = require('./server'); // Import the server
 
 let mainWindow;
-let serverProcess;
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -14,44 +13,26 @@ function createWindow() {
             contextIsolation: false
         },
         autoHideMenuBar: true,
-        icon: path.join(__dirname, 'client/dist/vite.svg') // Optional: Set icon
+        icon: path.join(__dirname, 'client/dist/vite.svg')
     });
 
     // Load the backend server URL
-    // We'll add a small delay to ensure server is ready, or implement a retry mechanism in loadURL (omitted for simplicity)
-    setTimeout(() => {
-        mainWindow.loadURL('http://localhost:3001');
-    }, 2000);
+    mainWindow.loadURL('http://localhost:3001');
 
     mainWindow.on('closed', function () {
         mainWindow = null;
     });
 }
 
-function startServer() {
-    return new Promise((resolve, reject) => {
-        // Start the Express server as a child process
-        serverProcess = spawn('node', [path.join(__dirname, 'server.js')]);
-
-        serverProcess.stdout.on('data', (data) => {
-            console.log(`Server: ${data}`);
-            if (data.toString().includes('Server running')) {
-                resolve();
-            }
-        });
-
-        serverProcess.stderr.on('data', (data) => {
-            console.error(`Server Error: ${data}`);
-        });
-
-        serverProcess.on('close', (code) => {
-            console.log(`Server process exited with code ${code}`);
-        });
-    });
-}
-
 app.on('ready', () => {
-    startServer().then(createWindow);
+    // Start server directly in the main process
+    startServer()
+        .then(() => {
+            createWindow();
+        })
+        .catch((err) => {
+            console.error('Failed to start server:', err);
+        });
 });
 
 app.on('window-all-closed', function () {
@@ -60,10 +41,4 @@ app.on('window-all-closed', function () {
 
 app.on('activate', function () {
     if (mainWindow === null) createWindow();
-});
-
-app.on('will-quit', () => {
-    if (serverProcess) {
-        serverProcess.kill();
-    }
 });
