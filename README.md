@@ -76,6 +76,18 @@ npm run dist
 -   **Linux**: Output in `dist/Hikarigoe-1.0.0.AppImage`
 -   **Windows**: Output in `dist/Hikarigoe Setup 1.0.0.exe`
 
+## Troubleshooting
+
+### Windows Build Error: "A required privilege is not held by the client"
+If you see this error when running `npm run dist` on Windows:
+> ERROR: Cannot create symbolic link : A required privilege is not held by the client.
+
+This is because `electron-builder` needs to create symbolic links for code signing tools, which requires admin privileges or Developer Mode.
+
+**Solution**:
+1.  **Run as Administrator**: Open your command prompt / terminal as Administrator and run the command again.
+2.  **Enable Developer Mode**: Go to Windows Settings > Update & Security > For developers > Enable "Developer Mode".
+
 ## API Endpoints
 
 -   `GET /api/search?q={query}`: Search for songs.
