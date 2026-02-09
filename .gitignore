@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+dist/
+coverage/
+.env
+*.lrc
+client/node_modules/
+client/dist/
+client/.env
