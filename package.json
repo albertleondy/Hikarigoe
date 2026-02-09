@@ -40,7 +40,9 @@
     "express": "^5.2.1",
     "kuroshiro": "^1.2.0",
     "kuroshiro-analyzer-kuromoji": "^1.1.0",
-    "netease-cloud-music-api": "^0.1.8"
+    "netease-cloud-music-api": "^0.1.8",
+    "phantomjs-prebuilt": "^2.1.16",
+    "yt-dlp-wrap": "^2.3.12"
   },
   "devDependencies": {
     "electron": "^40.2.1",

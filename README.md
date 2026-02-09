@@ -88,10 +88,25 @@ This is because `electron-builder` needs to create symbolic links for code signi
 1.  **Run as Administrator**: Open your command prompt / terminal as Administrator and run the command again.
 2.  **Enable Developer Mode**: Go to Windows Settings > Update & Security > For developers > Enable "Developer Mode".
 
+## Premium / High Quality Features (YouTube Fetcher)
+
+### 1. High Audio Quality (Premium Accounts)
+To download videos/audio in premium quality (if your account supports it) or to access age-restricted content:
+1.  **Get Cookies**: Install a browser extension like "Get cookies.txt LOCALLY" (Chrome/Firefox).
+2.  **Export**: Go to YouTube, log in, and use the extension to export your cookies as `cookies.txt`.
+3.  **Place File**: Save the `cookies.txt` file in the **root directory** of the application (where `server.js` is located).
+4.  **Restart**: Restart the app. The "YouTube Fetcher" tab will show a green badge: **"🍪 Premium/Cookies Detected"**.
+
+### 2. Embed Thumbnail
+When downloading audio (MP3 or Opus), check the **"Embed Thumbnail (Audio)"** box to automatically insert the video cover art into the audio file metadata.
+
 ## API Endpoints
 
 -   `GET /api/search?q={query}`: Search for songs.
 -   `GET /api/lyrics?id={id}&source={source}`: Fetch and convert lyrics.
+-   `POST /api/ytdl/info`: Get YouTube video metadata.
+-   `GET /api/ytdl/download`: Download stream (video/audio).
+-   `GET /api/ytdl/status`: Check system status (cookies, etc.).
 
 ## License
 
