@@ -288,6 +288,9 @@ app.get('/api/ytdl/download', async (req, res) => {
         // Actually, let's use process.execPath to be safe.
         args.push('--js-runtimes', `node:${process.execPath}`);
 
+        // Add metadata (Title, Artist, etc.)
+        args.push('--add-metadata');
+
         if (type === 'audio') {
             // MP3
             args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
