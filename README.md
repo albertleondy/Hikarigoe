@@ -59,6 +59,23 @@ Hikarigoe is a modern web application designed to fetch synced lyrics (`.lrc`) f
     -   View the Romaji lyrics on the right.
     -   Click "Download .lrc" to save the file.
 
+## Desktop App (Electron)
+
+Hikarigoe can be run as a standalone desktop application for Linux (AppImage) and Windows (.exe).
+
+### Development Mode
+```bash
+npm run electron:start
+```
+
+### Build Executable
+To build the application for your current OS:
+```bash
+npm run dist
+```
+-   **Linux**: Output in `dist/Hikarigoe-1.0.0.AppImage`
+-   **Windows**: Output in `dist/Hikarigoe Setup 1.0.0.exe`
+
 ## API Endpoints
 
 -   `GET /api/search?q={query}`: Search for songs.

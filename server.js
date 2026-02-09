@@ -162,6 +162,18 @@ app.get('/api/lyrics', async (req, res) => {
     }
 });
 
+// Serve static files from the React app
+const path = require('path');
+app.use(express.static(path.join(__dirname, 'client/dist')));
+
+// The "catchall" handler: for any request that doesn't
+// match one above, send back React's index.html file.
+app.get(/(.*)/, (req, res) => {
+    // Check if request is for API, if so don't return index.html (though express handles order)
+    // But if it reached here, it didn't match /api/...
+    res.sendFile(path.join(__dirname, 'client/dist', 'index.html'));
+});
+
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });

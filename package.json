@@ -2,9 +2,35 @@
   "name": "lyric-fetcher",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "main.js",
   "scripts": {
+    "start": "node server.js",
+    "electron:start": "npm run build:client && electron .",
+    "build:client": "cd client && npm install && npm run build",
+    "dist": "npm run build:client && electron-builder",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "build": {
+    "appId": "com.albertleondy.hikarigoe",
+    "productName": "Hikarigoe",
+    "files": [
+      "**/*",
+      "client/dist/**/*",
+      "!client/node_modules",
+      "!client/src",
+      "!client/public"
+    ],
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Music"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
   },
   "keywords": [],
   "author": "",
@@ -15,5 +41,9 @@
     "kuroshiro": "^1.2.0",
     "kuroshiro-analyzer-kuromoji": "^1.1.0",
     "netease-cloud-music-api": "^0.1.8"
+  },
+  "devDependencies": {
+    "electron": "^40.2.1",
+    "electron-builder": "^26.7.0"
   }
 }
