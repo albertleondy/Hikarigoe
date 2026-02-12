@@ -37,9 +37,59 @@ const YouTubeFetcher = () => {
         }
     };
 
-    const handleDownload = (type) => {
+    const handleDownload = async (type) => {
         if (!url) return;
-        window.location.href = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(url)}&type=${type}&embedThumbnail=${embedThumbnail}`;
+        setLoading(true);
+        setError(null);
+        try {
+            // 1. Start Job
+            const res = await fetch('http://localhost:3001/api/ytdl/prepare-download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url, type, embedThumbnail })
+            });
+            const data = await res.json();
+
+            if (!res.ok) throw new Error(data.error || 'Failed to start download');
+
+            const { jobId } = data;
+
+            // 2. Poll Status
+            const interval = setInterval(async () => {
+                try {
+                    const statusRes = await fetch(`http://localhost:3001/api/ytdl/job-status/${jobId}`);
+                    const statusData = await statusRes.json();
+
+                    if (statusData.status === 'ready') {
+                        clearInterval(interval);
+                        setLoading(false);
+                        // 3. Trigger Download via hidden iframe to avoid new window/navigation
+                        const iframe = document.createElement('iframe');
+                        iframe.style.display = 'none';
+                        iframe.src = `http://localhost:3001/api/ytdl/serve-file/${jobId}`;
+                        document.body.appendChild(iframe);
+
+                        // Cleanup iframe after a short delay
+                        setTimeout(() => {
+                            document.body.removeChild(iframe);
+                        }, 5000);
+                    } else if (statusData.status === 'error') {
+                        clearInterval(interval);
+                        setLoading(false);
+                        setError("Download Error: " + statusData.error);
+                    }
+                } catch (pollErr) {
+                    console.error("Polling error", pollErr);
+                    clearInterval(interval);
+                    setLoading(false);
+                    setError("Network error during polling");
+                }
+            }, 1000);
+
+        } catch (err) {
+            setLoading(false);
+            setError(err.message);
+        }
     };
 
     return (
@@ -90,15 +140,21 @@ const YouTubeFetcher = () => {
                     </div>
 
                     <div className="button-group" style={{ marginTop: '20px' }}>
-                        <button className="action-button" onClick={() => handleDownload('video')}>
-                            Download Video (MP4)
-                        </button>
-                        <button className="action-button download-button" onClick={() => handleDownload('audio')}>
-                            Download Audio (MP3)
-                        </button>
-                        <button className="action-button" onClick={() => handleDownload('opus')}>
-                            Download Audio (Opus)
-                        </button>
+                        {loading ? (
+                            <p style={{ textAlign: 'center', color: '#888' }}>Processing Download... Please wait...</p>
+                        ) : (
+                            <>
+                                <button className="action-button" onClick={() => handleDownload('video')}>
+                                    Download Video (MP4)
+                                </button>
+                                <button className="action-button download-button" onClick={() => handleDownload('audio')}>
+                                    Download Audio (MP3)
+                                </button>
+                                <button className="action-button" onClick={() => handleDownload('opus')}>
+                                    Download Audio (Opus)
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
             )}

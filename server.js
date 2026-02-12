@@ -170,33 +170,39 @@ app.get('/api/lyrics', async (req, res) => {
 // YouTube Fetcher Logic
 const YTDlpWrap = require('yt-dlp-wrap').default;
 
-const ytDlpBinaryPath = nodePath.join(__dirname, 'yt-dlp');
-const ytDlpWrap = new YTDlpWrap();
+let ytDlpWrap;
+let userDataPath;
 
-// Ensure binary exists and use local one
-(async () => {
+async function setupYtDlp(customUserDataPath) {
+    userDataPath = customUserDataPath || nodePath.join(__dirname, 'data'); // Fallback for local dev
+
+    // Ensure user data directory exists
+    if (!fs.existsSync(userDataPath)) {
+        fs.mkdirSync(userDataPath, { recursive: true });
+    }
+
+    const ytDlpBinaryPath = nodePath.join(userDataPath, 'yt-dlp');
+    ytDlpWrap = new YTDlpWrap();
+
     try {
-        console.log("Checking for local yt-dlp binary at:", ytDlpBinaryPath);
+        console.log("Checking for yt-dlp binary at:", ytDlpBinaryPath);
         if (!fs.existsSync(ytDlpBinaryPath)) {
-            console.log("Local yt-dlp not found. Downloading latest...");
+            console.log("yt-dlp not found. Downloading latest...");
             await YTDlpWrap.downloadFromGithub(ytDlpBinaryPath);
-            // Ensure executable permissions
             fs.chmodSync(ytDlpBinaryPath, '755');
             console.log("yt-dlp downloaded successfully.");
         } else {
-            console.log("Local yt-dlp found.");
+            console.log("yt-dlp found.");
         }
 
-        // Update the wrap instance to use this path
         ytDlpWrap.setBinaryPath(ytDlpBinaryPath);
-
         const version = await ytDlpWrap.getVersion();
         console.log(`Using yt-dlp version: ${version}`);
 
     } catch (e) {
         console.error("Failed to setup yt-dlp:", e);
     }
-})();
+}
 
 app.post('/api/ytdl/info', async (req, res) => {
     const { url } = req.body;
@@ -217,140 +223,154 @@ app.post('/api/ytdl/info', async (req, res) => {
     }
 });
 
+// Job Queue for Downloads
+const downloadJobs = {};
+
 app.get('/api/ytdl/status', (req, res) => {
-    const cookiesPath = nodePath.join(__dirname, 'cookies.txt');
+    const cookiesPath = nodePath.join(userDataPath, 'cookies.txt');
     const cookiesFound = fs.existsSync(cookiesPath);
     res.json({ cookiesFound });
 });
 
-app.get('/api/ytdl/download', async (req, res) => {
-    const { url, type, embedThumbnail } = req.query;
+app.post('/api/ytdl/prepare-download', async (req, res) => {
+    const { url, type, embedThumbnail } = req.body;
     if (!url || !type) return res.status(400).json({ error: 'URL and type are required' });
 
-    console.log(`\n📥 Downloading ${type} from: ${url} (Embed Thumbnail: ${embedThumbnail})`);
+    const jobId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+    downloadJobs[jobId] = {
+        id: jobId,
+        status: 'pending',
+        url,
+        type,
+        startTime: Date.now()
+    };
 
-    const tempDir = nodePath.join(__dirname, 'temp_downloads');
-    if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir);
+    // Start background processing
+    processDownload(jobId, url, type, embedThumbnail).catch(err => {
+        console.error(`Job ${jobId} failed:`, err);
+        if (downloadJobs[jobId]) {
+            downloadJobs[jobId].status = 'error';
+            downloadJobs[jobId].error = err.message;
+        }
+    });
+
+    res.json({ jobId, status: 'pending' });
+});
+
+app.get('/api/ytdl/job-status/:jobId', (req, res) => {
+    const { jobId } = req.params;
+    const job = downloadJobs[jobId];
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    res.json(job);
+});
+
+app.get('/api/ytdl/serve-file/:jobId', (req, res) => {
+    const { jobId } = req.params;
+    const job = downloadJobs[jobId];
+
+    if (!job || job.status !== 'ready' || !job.filePath) {
+        return res.status(404).send('File not ready or job not found');
     }
 
-    // Generate a unique ID for this download to avoid collisions
-    const uniqueId = Date.now() + Math.floor(Math.random() * 1000);
-    // Placeholder filename, will be renamed by yt-dlp usually but we force specific output
-    // We need to know the extension ahead of time or let yt-dlp handle it.
-    // For simplicity, let's determine expected extension.
+    res.download(job.filePath, job.filename, (err) => {
+        if (err) console.error("Send file error:", err);
+        // Transform job to cleanup state or delete immediately?
+        // Let's delete the file after sending to save space
+        try {
+            fs.unlinkSync(job.filePath);
+            console.log(`Cleaned up file for job ${jobId}`);
+        } catch (e) {
+            console.error("Cleanup failed:", e);
+        }
+        delete downloadJobs[jobId];
+    });
+});
+
+async function processDownload(jobId, url, type, embedThumbnail) {
+    console.log(`\n📥 Starting Download Job ${jobId}: ${type} from ${url}`);
+    const job = downloadJobs[jobId];
+    if (!job) return;
+
+    const tempDir = nodePath.join(userDataPath, 'temp_downloads');
+    if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+    }
+
     let ext = 'mp4';
     if (type === 'audio') ext = 'mp3';
     else if (type === 'opus') ext = 'opus';
-    // Note: yt-dlp might output .webm or .ogg for opus, but we can try to force or just use a pattern.
 
-    // We'll use a template for yt-dlp output
-    const tempBasePath = nodePath.join(tempDir, `dl_${uniqueId}`);
-    // Output template: temp_downloads/dl_12345.%(ext)s
+    const tempBasePath = nodePath.join(tempDir, `dl_${jobId}`);
     const outputTemplate = `${tempBasePath}.%(ext)s`;
 
     try {
         let args = [url];
-
-        // Cookies
-        const cookiesPath = nodePath.join(__dirname, 'cookies.txt');
-        if (fs.existsSync(cookiesPath)) {
-            console.log("🍪 Found cookies.txt, using for yt-dlp...");
-            args.push('--cookies', cookiesPath);
-        }
-
-        // Embed Thumbnail
-        if (embedThumbnail === 'true') {
-            args.push('--embed-thumbnail');
-        }
-
-        // Format specific args
-        let finalFilename = `download.${ext}`; // Fallback
-
-        // Get Metadata for nice filename (we do this separately or let yt-dlp handle it? 
-        // We can get metadata from the file later or just request it now.
-        // Let's request metadata first to get a nice filename for the User Download.
-        let metaArgs = [url, '--dump-json'];
-        if (fs.existsSync(cookiesPath)) metaArgs.push('--cookies', cookiesPath);
+        const cookiesPath = nodePath.join(userDataPath, 'cookies.txt');
+        if (fs.existsSync(cookiesPath)) args.push('--cookies', cookiesPath);
+        if (embedThumbnail) args.push('--embed-thumbnail');
 
         let title = 'download';
         try {
+            // Quick metadata fetch
+            let metaArgs = [url, '--dump-json'];
+            if (fs.existsSync(cookiesPath)) metaArgs.push('--cookies', cookiesPath);
             const metaStdout = await ytDlpWrap.execPromise(metaArgs);
             const meta = JSON.parse(metaStdout);
-            title = meta.title.replace(/[<>"\/\\|?*:]/g, '_'); // Sanitize
+            title = meta.title.replace(/[<>"\/\\|?*:]/g, '_');
         } catch (e) {
             console.error("Meta fetch failed, using default name", e);
         }
 
-        // Explicitly set Node.js as the runtime for signature challenges
-        // We know node is available since we are running in it.
-        // yt-dlp might need full path if not in PATH for some reason, but 'node' should work.
-        // Actually, let's use process.execPath to be safe.
         args.push('--js-runtimes', `node:${process.execPath}`);
+        args.push('--add-metadata'); // always add metadata
 
-        // Add metadata (Title, Artist, etc.)
-        args.push('--add-metadata');
+        let finalFilename = `download.${ext}`;
 
         if (type === 'audio') {
-            // MP3
             args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
             args.push('-o', outputTemplate);
             finalFilename = `${title}.mp3`;
         } else if (type === 'opus') {
-            // Opus - default bestaudio is often WebM which doesn't support embedding thumbnails well
-            // We must transcode/remux to OGG/Opus for thumbnail support.
             args.push('-x', '--audio-format', 'opus');
             args.push('-o', outputTemplate);
-            // Result will be .opus
             finalFilename = `${title}.opus`;
         } else {
-            // Video
             args.push('-f', 'best[ext=mp4]');
             args.push('-o', outputTemplate);
             finalFilename = `${title}.mp4`;
         }
 
-        console.log("Starting download with args:", args.join(' '));
-
         await ytDlpWrap.execPromise(args);
 
-        // Find the generated file. Since extension might vary (esp for opus -> webm), find the file matching the ID.
         const files = fs.readdirSync(tempDir);
-        const downloadedFile = files.find(f => f.startsWith(`dl_${uniqueId}`));
+        const downloadedFile = files.find(f => f.startsWith(`dl_${jobId}`));
 
-        if (!downloadedFile) {
-            throw new Error("Downloaded file not found");
-        }
+        if (!downloadedFile) throw new Error("Downloaded file not found");
 
         const fullPath = nodePath.join(tempDir, downloadedFile);
 
-        // If opus requested and we got webm/ogg, usually browsers handle it, but let's just send what we got
-        // correcting the filename extension if needed.
+        // Fix extension logic if needed
         const actualExt = nodePath.extname(downloadedFile);
         if (type === 'opus' && finalFilename.endsWith('.opus') && actualExt !== '.opus') {
-            // Update filename to match actual container if it matters
-            // But user asked for opus. .opus is OGG container usually. webm is Matroska.
-            // Let's just keep the original safe title and append actual extension
             finalFilename = `${title}${actualExt}`;
         }
 
-        console.log(`Sending file: ${fullPath} as ${finalFilename}`);
-        res.download(fullPath, finalFilename, (err) => {
-            if (err) console.error("Send file error:", err);
-            // Cleanup
-            try {
-                fs.unlinkSync(fullPath);
-                console.log("Temp file deleted.");
-            } catch (e) {
-                console.error("Cleanup failed:", e);
-            }
-        });
+        job.status = 'ready';
+        job.filePath = fullPath;
+        job.filename = finalFilename;
+        console.log(`Job ${jobId} ready: ${finalFilename}`);
 
     } catch (error) {
-        console.error("Download processing error:", error);
-        if (!res.headersSent) res.status(500).json({ error: 'Download failed: ' + error.message });
+        console.error(`Job ${jobId} error:`, error);
+        job.status = 'error';
+        job.error = error.message;
+        throw error;
     }
-});
+}
+
+
+// Legacy/Blocking download logic removed in favor of job system
+// app.get('/api/ytdl/download' ... ) removed
 
 // Serve static files from the React app
 app.use(express.static(nodePath.join(__dirname, 'client/dist')));
@@ -363,8 +383,11 @@ app.get(/(.*)/, (req, res) => {
     res.sendFile(nodePath.join(__dirname, 'client/dist', 'index.html'));
 });
 
-function startServer() {
-    return new Promise((resolve, reject) => {
+function startServer(config = {}) {
+    return new Promise(async (resolve, reject) => {
+        // Initialize with provided userDataPath or default
+        await setupYtDlp(config.userDataPath);
+
         const server = app.listen(PORT, () => {
             console.log(`Server running on http://localhost:${PORT}`);
             resolve(server);
