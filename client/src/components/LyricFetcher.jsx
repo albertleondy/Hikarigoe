@@ -18,7 +18,8 @@ const LyricFetcher = () => {
         setSelectedLyrics(null);
 
         try {
-            const response = await fetch(`http://localhost:3001/api/search?q=${encodeURIComponent(query)}`);
+            const apiUrl = import.meta.env.VITE_API_URL;
+            const response = await fetch(`${apiUrl}/api/search?q=${encodeURIComponent(query)}`);
             if (!response.ok) {
                 throw new Error('Search failed');
             }
@@ -37,7 +38,8 @@ const LyricFetcher = () => {
         setSelectedLyrics(null);
 
         try {
-            const response = await fetch(`http://localhost:3001/api/lyrics?id=${song.id}&source=${song.source}`);
+            const apiUrl = import.meta.env.VITE_API_URL;
+            const response = await fetch(`${apiUrl}/api/lyrics?id=${song.id}&source=${song.source}`);
             if (!response.ok) {
                 throw new Error('Failed to fetch lyrics');
             }

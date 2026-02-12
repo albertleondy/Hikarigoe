@@ -9,7 +9,8 @@ const YouTubeFetcher = () => {
     const [embedThumbnail, setEmbedThumbnail] = useState(false);
 
     React.useEffect(() => {
-        fetch('http://localhost:3001/api/ytdl/status')
+        const apiUrl = import.meta.env.VITE_API_URL;
+        fetch(`${apiUrl}/api/ytdl/status`)
             .then(res => res.json())
             .then(data => setCookieStatus(data.cookiesFound))
             .catch(err => console.error("Failed to check cookies", err));
@@ -22,7 +23,8 @@ const YouTubeFetcher = () => {
         setError(null);
         setVideoInfo(null);
         try {
-            const res = await fetch('http://localhost:3001/api/ytdl/info', {
+            const apiUrl = import.meta.env.VITE_API_URL;
+            const res = await fetch(`${apiUrl}/api/ytdl/info`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url })
@@ -39,7 +41,8 @@ const YouTubeFetcher = () => {
 
     const handleDownload = (type) => {
         if (!url) return;
-        window.location.href = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(url)}&type=${type}&embedThumbnail=${embedThumbnail}`;
+        const apiUrl = import.meta.env.VITE_API_URL;
+        window.location.href = `${apiUrl}/api/ytdl/download?url=${encodeURIComponent(url)}&type=${type}&embedThumbnail=${embedThumbnail}`;
     };
 
     return (
