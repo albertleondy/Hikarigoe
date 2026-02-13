@@ -167,6 +167,41 @@ app.get('/api/lyrics', async (req, res) => {
     }
 });
 
+app.post('/api/convert', async (req, res) => {
+    const { text } = req.body;
+
+    if (!text) {
+        return res.status(400).json({ error: 'Text is required' });
+    }
+
+    console.log(`\n🔄 Converting raw text...`);
+
+    try {
+        await initKuroshiro();
+        const lines = text.split("\n");
+        let results = [];
+
+        for (const line of lines) {
+            if (line.trim()) {
+                const converted = await kuroshiro.convert(line, {
+                    to: "romaji",
+                    mode: "spaced",
+                    romajiSystem: "hepburn",
+                });
+                results.push({ original: line, romaji: converted });
+            } else {
+                results.push({ original: "", romaji: "" });
+            }
+        }
+
+        res.json({ results });
+
+    } catch (error) {
+        console.error("Conversion Error:", error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 // YouTube Fetcher Logic
 const YTDlpWrap = require('yt-dlp-wrap').default;
 
@@ -267,7 +302,7 @@ app.get('/api/ytdl/download', async (req, res) => {
         // Format specific args
         let finalFilename = `download.${ext}`; // Fallback
 
-        // Get Metadata for nice filename (we do this separately or let yt-dlp handle it? 
+        // Get Metadata for nice filename (we do this separately or let yt-dlp handle it?
         // We can get metadata from the file later or just request it now.
         // Let's request metadata first to get a nice filename for the User Download.
         let metaArgs = [url, '--dump-json'];

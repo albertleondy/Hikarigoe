@@ -15,6 +15,12 @@ const Navbar = ({ currentView, setView }) => {
             >
                 YouTube Downloader
             </button>
+            <button
+                className={`nav-button ${currentView === 'converter' ? 'active' : ''}`}
+                onClick={() => setView('converter')}
+            >
+                Kanji to Romaji
+            </button>
         </div>
     );
 };

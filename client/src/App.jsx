@@ -3,6 +3,7 @@ import './index.css';
 import Navbar from './components/Navbar';
 import LyricFetcher from './components/LyricFetcher';
 import YouTubeFetcher from './components/YouTubeFetcher';
+import RomajiConverter from './components/RomajiConverter';
 
 function App() {
   const [currentView, setCurrentView] = useState('lyrics'); // 'lyrics' or 'youtube'
@@ -15,7 +16,9 @@ function App() {
 
         <Navbar currentView={currentView} setView={setCurrentView} />
 
-        {currentView === 'lyrics' ? <LyricFetcher /> : <YouTubeFetcher />}
+        {currentView === 'lyrics' && <LyricFetcher />}
+        {currentView === 'youtube' && <YouTubeFetcher />}
+        {currentView === 'converter' && <RomajiConverter />}
       </div>
     </div>
   );
