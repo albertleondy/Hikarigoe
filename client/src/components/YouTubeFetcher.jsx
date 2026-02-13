@@ -7,6 +7,7 @@ const YouTubeFetcher = () => {
     const [error, setError] = useState(null);
     const [cookieStatus, setCookieStatus] = useState(false);
     const [embedThumbnail, setEmbedThumbnail] = useState(false);
+    const [embedRomajiLyrics, setEmbedRomajiLyrics] = useState(false);
 
     React.useEffect(() => {
         fetch('http://localhost:3001/api/ytdl/status')
@@ -39,7 +40,7 @@ const YouTubeFetcher = () => {
 
     const handleDownload = (type) => {
         if (!url) return;
-        window.location.href = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(url)}&type=${type}&embedThumbnail=${embedThumbnail}`;
+        window.location.href = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(url)}&type=${type}&embedThumbnail=${embedThumbnail}&embedRomajiLyrics=${embedRomajiLyrics}`;
     };
 
     return (
@@ -87,6 +88,14 @@ const YouTubeFetcher = () => {
                             />
                             Embed Thumbnail (Audio)
                         </label>
+                        <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#b3b3b3', marginLeft: '20px' }}>
+                            <input
+                                type="checkbox"
+                                checked={embedRomajiLyrics}
+                                onChange={e => setEmbedRomajiLyrics(e.target.checked)}
+                            />
+                            Embed Romaji Lyrics (MP3/Opus)
+                        </label>
                     </div>
 
                     <div className="button-group" style={{ marginTop: '20px' }}>
@@ -96,7 +105,7 @@ const YouTubeFetcher = () => {
                         <button className="action-button download-button" onClick={() => handleDownload('audio')}>
                             Download Audio (MP3)
                         </button>
-                        <button className="action-button" onClick={() => handleDownload('opus')}>
+                        <button className="action-button download-button" onClick={() => handleDownload('opus')}>
                             Download Audio (Opus)
                         </button>
                     </div>

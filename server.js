@@ -5,6 +5,8 @@ const Kuroshiro = require("kuroshiro").default;
 const KuromojiAnalyzer = require("kuroshiro-analyzer-kuromoji");
 const nodePath = require('path');
 const fs = require('fs');
+const NodeID3 = require('node-id3');
+const { exec, spawn } = require('child_process');
 
 const app = express();
 const PORT = 3001;
@@ -370,11 +372,130 @@ app.get('/api/ytdl/download', async (req, res) => {
         }
 
         console.log(`Sending file: ${fullPath} as ${finalFilename}`);
+
+        // EMBED ROMAJI LYRICS IF REQUESTED (MP3/Opus)
+        const embedRomaji = req.query.embedRomajiLyrics === 'true';
+
+        if (embedRomaji && (type === 'audio' || type === 'opus')) {
+            try {
+                console.log("🎤 Attempting to fetch and embed Romaji lyrics...");
+
+                // 1. Search for lyrics using the clean title
+                const searchQuery = title.replace(/_/g, ' ');
+                console.log(`   Searching lyrics for: ${searchQuery}`);
+
+                let rawLyrics = null;
+
+                const lrcSearchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(searchQuery)}`);
+                if (lrcSearchRes.ok) {
+                    const lrcData = await lrcSearchRes.json();
+                    if (lrcData && lrcData.length > 0) {
+                        const songId = lrcData[0].id;
+                        const lrcGetRes = await fetch(`https://lrclib.net/api/get/${songId}`);
+                        if (lrcGetRes.ok) {
+                            const songData = await lrcGetRes.json();
+                            rawLyrics = songData.syncedLyrics || songData.plainLyrics;
+                        }
+                    }
+                }
+
+                if (rawLyrics) {
+                     // 2. Convert to Romaji
+                     await initKuroshiro();
+                     const lines = rawLyrics.split("\n");
+                     let romajiLyrics = "";
+
+                     for (const line of lines) {
+                        if (line.trim()) {
+                            const match = line.match(/^(\[.*?\])(.*)/);
+                            if (match) {
+                                const timestamp = match[1];
+                                const content = match[2];
+                                if (content.trim()) {
+                                    const converted = await kuroshiro.convert(content, {
+                                        to: "romaji",
+                                        mode: "spaced",
+                                        romajiSystem: "hepburn",
+                                    });
+                                    romajiLyrics += `${timestamp} ${converted}\n`;
+                                } else {
+                                     romajiLyrics += `${line}\n`;
+                                }
+                            } else {
+                                const converted = await kuroshiro.convert(line, {
+                                    to: "romaji",
+                                    mode: "spaced",
+                                    romajiSystem: "hepburn",
+                                });
+                                romajiLyrics += `${converted}\n`;
+                            }
+                        } else {
+                            romajiLyrics += "\n";
+                        }
+                     }
+
+                     // 3. Embed
+                     if (type === 'audio') { // MP3
+                         console.log("   Embedding lyrics into MP3...");
+                         const success = NodeID3.update(
+                             { unsynchronisedLyrics: { language: "eng", text: romajiLyrics } },
+                             fullPath
+                         );
+                         if (success) console.log("   Lyrics embedded successfully (MP3).");
+                         else console.error("   Failed to verify lyrics embedding (MP3).");
+
+                     } else if (type === 'opus') { // Opus
+                         console.log("   Embedding lyrics into Opus...");
+                         const tempOutputPath = fullPath.replace('.opus', '_temp.opus');
+                         // spawn is required from child_process
+
+                         await new Promise((resolve, reject) => {
+                             const ffmpegArgs = [
+                                 '-y',
+                                 '-i', fullPath,
+                                 '-c', 'copy',
+                                 '-metadata', `lyrics=${romajiLyrics}`,
+                                 tempOutputPath
+                             ];
+
+                             const ffmpegProcess = spawn('ffmpeg', ffmpegArgs);
+
+                             ffmpegProcess.on('close', (code) => {
+                                 if (code === 0) {
+                                     try {
+                                         if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+                                         fs.renameSync(tempOutputPath, fullPath);
+                                         console.log("   Lyrics embedded successfully (Opus).");
+                                         resolve();
+                                     } catch (err) { reject(err); }
+                                 } else {
+                                     reject(new Error(`ffmpeg exited with code ${code}`));
+                                 }
+                             });
+                         });
+                     }
+
+                } else {
+                    console.log("   No lyrics found to embed.");
+                }
+
+            } catch (lyricErr) {
+                console.error("   Failed to embed lyrics:", lyricErr);
+            }
+        }
+
+        // Manually set Content-Disposition to ensure browsers handle UTF-8 filenames correctly
+        // content-disposition library used by res.download usually works, but manual fallback helps.
+        // Format: attachment; filename="fallback.ext"; filename*=UTF-8''encoded_name.ext
+        const encodedFilename = encodeURIComponent(finalFilename).replace(/['()]/g, escape).replace(/\*/g, '%2A');
+
+        res.setHeader('Content-Disposition', `attachment; filename="download.${type === 'audio' ? 'mp3' : 'opus'}"; filename*=UTF-8''${encodedFilename}`);
+
         res.download(fullPath, finalFilename, (err) => {
             if (err) console.error("Send file error:", err);
             // Cleanup
             try {
-                fs.unlinkSync(fullPath);
+                if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
                 console.log("Temp file deleted.");
             } catch (e) {
                 console.error("Cleanup failed:", e);
