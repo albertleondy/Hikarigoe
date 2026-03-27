@@ -217,6 +217,43 @@ app.post('/api/ytdl/info', async (req, res) => {
     }
 });
 
+app.get('/api/ytdl/search', async (req, res) => {
+    const { q } = req.query;
+    if (!q) return res.status(400).json({ error: 'Query parameter "q" is required' });
+
+    console.log(`\n🔍 YouTube Search: ${q}`);
+    try {
+        let args = [`ytsearch24:${q}`, '--dump-json', '--flat-playlist'];
+
+        const cookiesPath = nodePath.join(__dirname, 'cookies.txt');
+        if (fs.existsSync(cookiesPath)) {
+            args.push('--cookies', cookiesPath);
+        }
+
+        const stdout = await ytDlpWrap.execPromise(args);
+        const results = stdout.trim().split('\n').map(line => {
+            try {
+                const meta = JSON.parse(line);
+                return {
+                    id: meta.id,
+                    title: meta.title,
+                    url: `https://www.youtube.com/watch?v=${meta.id}`,
+                    thumbnail: meta.thumbnails?.[0]?.url || "",
+                    duration: meta.duration,
+                    channel: meta.uploader || meta.channel
+                };
+            } catch (e) {
+                return null;
+            }
+        }).filter(item => item !== null);
+
+        res.json(results);
+    } catch (error) {
+        console.error("yt-dlp search error:", error);
+        res.status(500).json({ error: 'Failed to search YouTube. ' + error.message });
+    }
+});
+
 app.get('/api/ytdl/status', (req, res) => {
     const cookiesPath = nodePath.join(__dirname, 'cookies.txt');
     const cookiesFound = fs.existsSync(cookiesPath);
@@ -293,12 +330,14 @@ app.get('/api/ytdl/download', async (req, res) => {
 
         if (type === 'audio') {
             // MP3
+            args.push('-f', 'bestaudio');
             args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
             args.push('-o', outputTemplate);
             finalFilename = `${title}.mp3`;
         } else if (type === 'opus') {
             // Opus - default bestaudio is often WebM which doesn't support embedding thumbnails well
             // We must transcode/remux to OGG/Opus for thumbnail support.
+            args.push('-f', 'bestaudio');
             args.push('-x', '--audio-format', 'opus');
             args.push('-o', outputTemplate);
             // Result will be .opus

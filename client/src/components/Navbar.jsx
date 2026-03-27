@@ -10,10 +10,16 @@ const Navbar = ({ currentView, setView }) => {
                 Lyrics Translator
             </button>
             <button
-                className={`nav-button ${currentView === 'youtube' ? 'active' : ''}`}
-                onClick={() => setView('youtube')}
+                className={`nav-button ${currentView === 'youtube-dl' ? 'active' : ''}`}
+                onClick={() => setView('youtube-dl')}
             >
                 YouTube Downloader
+            </button>
+            <button
+                className={`nav-button ${currentView === 'youtube-search' ? 'active' : ''}`}
+                onClick={() => setView('youtube-search')}
+            >
+                YouTube Search
             </button>
         </div>
     );
