@@ -118,11 +118,26 @@ const LyricFetcher = () => {
                         <p>Fetching & Converting Lyrics...</p>
                     </div>
                 ) : selectedLyrics ? (
-                    <div className="result-container fadeIn">
+                    <div
+                        className="result-container fadeIn"
+                        draggable
+                        onDragStart={(e) => {
+                            const lrcContent = selectedLyrics.lyrics.map(l => `${l.timestamp} ${l.romaji}`).join('\n');
+                            const payload = {
+                                title: `${selectedLyrics.song} - ${selectedLyrics.artist}`,
+                                raw: lrcContent
+                            };
+                            e.dataTransfer.setData('application/json', JSON.stringify(payload));
+                            e.dataTransfer.effectAllowed = 'copy'; // Optional cursor styling
+                        }}
+                        style={{ cursor: 'grab' }}
+                        title="Drag me into a video in your Download Queue!"
+                    >
                         <div className="song-header">
                             <h2>{selectedLyrics.song}</h2>
                             <h3>{selectedLyrics.artist}</h3>
                             <span className="source-badge">Source: {selectedLyrics.source}</span>
+                            <p style={{ margin: '10px 0 0 0', fontSize: '0.8rem', color: '#ff7eb3' }}>✨ Drag this card into your queue to embed! ✨</p>
                         </div>
 
                         <div className="lyrics-scroll">

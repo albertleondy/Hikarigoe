@@ -260,53 +260,57 @@ app.get('/api/ytdl/status', (req, res) => {
     res.json({ cookiesFound });
 });
 
+const { spawnSync } = require('child_process');
+
+// Lyrics Job Store
+const lyricsJobs = new Map();
+
+app.post('/api/ytdl/prepare_lyrics', (req, res) => {
+    const { lyricsData } = req.body;
+    if (!lyricsData) return res.status(400).json({ error: 'Missing lyricsData' });
+    const jobId = Math.random().toString(36).substring(2, 15);
+    lyricsJobs.set(jobId, lyricsData);
+
+    // Auto cleanup after 10 mins
+    setTimeout(() => {
+        lyricsJobs.delete(jobId);
+    }, 10 * 60 * 1000);
+
+    res.json({ jobId });
+});
+
 app.get('/api/ytdl/download', async (req, res) => {
-    const { url, type, embedThumbnail } = req.query;
+    const { url, type, embedThumbnail, jobId } = req.query;
     if (!url || !type) return res.status(400).json({ error: 'URL and type are required' });
 
-    console.log(`\n📥 Downloading ${type} from: ${url} (Embed Thumbnail: ${embedThumbnail})`);
+    const lyricsData = jobId ? lyricsJobs.get(jobId) : null;
+    console.log(`\n📥 Downloading ${type} from: ${url} (Embed Thumb: ${embedThumbnail}, Has Lyrics: ${!!lyricsData})`);
 
     const tempDir = nodePath.join(__dirname, 'temp_downloads');
     if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir);
     }
 
-    // Generate a unique ID for this download to avoid collisions
     const uniqueId = Date.now() + Math.floor(Math.random() * 1000);
-    // Placeholder filename, will be renamed by yt-dlp usually but we force specific output
-    // We need to know the extension ahead of time or let yt-dlp handle it.
-    // For simplicity, let's determine expected extension.
     let ext = 'mp4';
     if (type === 'audio') ext = 'mp3';
     else if (type === 'opus') ext = 'opus';
-    // Note: yt-dlp might output .webm or .ogg for opus, but we can try to force or just use a pattern.
 
-    // We'll use a template for yt-dlp output
     const tempBasePath = nodePath.join(tempDir, `dl_${uniqueId}`);
-    // Output template: temp_downloads/dl_12345.%(ext)s
     const outputTemplate = `${tempBasePath}.%(ext)s`;
 
     try {
         let args = [url];
-
-        // Cookies
         const cookiesPath = nodePath.join(__dirname, 'cookies.txt');
         if (fs.existsSync(cookiesPath)) {
-            console.log("🍪 Found cookies.txt, using for yt-dlp...");
             args.push('--cookies', cookiesPath);
         }
 
-        // Embed Thumbnail
         if (embedThumbnail === 'true') {
             args.push('--embed-thumbnail');
         }
 
-        // Format specific args
-        let finalFilename = `download.${ext}`; // Fallback
-
-        // Get Metadata for nice filename (we do this separately or let yt-dlp handle it? 
-        // We can get metadata from the file later or just request it now.
-        // Let's request metadata first to get a nice filename for the User Download.
+        let finalFilename = `download.${ext}`;
         let metaArgs = [url, '--dump-json'];
         if (fs.existsSync(cookiesPath)) metaArgs.push('--cookies', cookiesPath);
 
@@ -314,69 +318,76 @@ app.get('/api/ytdl/download', async (req, res) => {
         try {
             const metaStdout = await ytDlpWrap.execPromise(metaArgs);
             const meta = JSON.parse(metaStdout);
-            title = meta.title.replace(/[<>"\/\\|?*:]/g, '_'); // Sanitize
+            title = meta.title.replace(/[<>"\/\\|?*:]/g, '_');
         } catch (e) {
             console.error("Meta fetch failed, using default name", e);
         }
 
-        // Explicitly set Node.js as the runtime for signature challenges
-        // We know node is available since we are running in it.
-        // yt-dlp might need full path if not in PATH for some reason, but 'node' should work.
-        // Actually, let's use process.execPath to be safe.
         args.push('--js-runtimes', `node:${process.execPath}`);
-
-        // Add metadata (Title, Artist, etc.)
         args.push('--add-metadata');
 
         if (type === 'audio') {
-            // MP3
             args.push('-f', 'bestaudio');
             args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
             args.push('-o', outputTemplate);
             finalFilename = `${title}.mp3`;
         } else if (type === 'opus') {
-            // Opus - default bestaudio is often WebM which doesn't support embedding thumbnails well
-            // We must transcode/remux to OGG/Opus for thumbnail support.
             args.push('-f', 'bestaudio');
             args.push('-x', '--audio-format', 'opus');
             args.push('-o', outputTemplate);
-            // Result will be .opus
             finalFilename = `${title}.opus`;
         } else {
-            // Video
             args.push('-f', 'best[ext=mp4]');
             args.push('-o', outputTemplate);
             finalFilename = `${title}.mp4`;
         }
 
-        console.log("Starting download with args:", args.join(' '));
-
         await ytDlpWrap.execPromise(args);
 
-        // Find the generated file. Since extension might vary (esp for opus -> webm), find the file matching the ID.
         const files = fs.readdirSync(tempDir);
-        const downloadedFile = files.find(f => f.startsWith(`dl_${uniqueId}`));
+        let downloadedFile = files.find(f => f.startsWith(`dl_${uniqueId}`));
 
         if (!downloadedFile) {
             throw new Error("Downloaded file not found");
         }
 
-        const fullPath = nodePath.join(tempDir, downloadedFile);
+        let fullPath = nodePath.join(tempDir, downloadedFile);
 
-        // If opus requested and we got webm/ogg, usually browsers handle it, but let's just send what we got
-        // correcting the filename extension if needed.
-        const actualExt = nodePath.extname(downloadedFile);
+        // FFMPEG Embedding Lyrics Post-Process
+        if (lyricsData && (type === 'audio' || type === 'opus')) {
+            console.log("Adding lyrics metadata via ffmpeg...");
+            const lyricsText = lyricsData.raw;
+            const newFullPath = nodePath.join(tempDir, `lyric_${uniqueId}_${downloadedFile}`);
+
+            // For opus (ogg container), lyrics metadata key is 'lyrics'
+            // For mp3, 'lyrics' maps nicely to USLT via ffmpeg
+            const ffmpegArgs = [
+                '-i', fullPath,
+                '-c', 'copy',
+                '-metadata', `lyrics=${lyricsText}`,
+                newFullPath
+            ];
+
+            const result = spawnSync('ffmpeg', ffmpegArgs);
+            if (result.error || result.status !== 0) {
+                console.error("FFMPEG lyrics embedding failed:", result.stderr ? result.stderr.toString() : 'Unknown Error');
+            } else {
+                // Success! Delete old file, set fullPath to new file
+                try {
+                    fs.unlinkSync(fullPath);
+                } catch (e) { }
+                fullPath = newFullPath;
+            }
+        }
+
+        const actualExt = nodePath.extname(fullPath);
         if (type === 'opus' && finalFilename.endsWith('.opus') && actualExt !== '.opus') {
-            // Update filename to match actual container if it matters
-            // But user asked for opus. .opus is OGG container usually. webm is Matroska.
-            // Let's just keep the original safe title and append actual extension
             finalFilename = `${title}${actualExt}`;
         }
 
         console.log(`Sending file: ${fullPath} as ${finalFilename}`);
         res.download(fullPath, finalFilename, (err) => {
             if (err) console.error("Send file error:", err);
-            // Cleanup
             try {
                 fs.unlinkSync(fullPath);
                 console.log("Temp file deleted.");
