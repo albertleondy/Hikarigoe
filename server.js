@@ -169,8 +169,10 @@ app.get('/api/lyrics', async (req, res) => {
 
 // YouTube Fetcher Logic
 const YTDlpWrap = require('yt-dlp-wrap').default;
+const os = require('os');
 
-const ytDlpBinaryPath = nodePath.join(__dirname, 'yt-dlp');
+const isWindows = os.platform() === 'win32';
+const ytDlpBinaryPath = nodePath.join(__dirname, isWindows ? 'yt-dlp.exe' : 'yt-dlp');
 const ytDlpWrap = new YTDlpWrap();
 
 // Ensure binary exists and use local one
@@ -356,27 +358,35 @@ app.get('/api/ytdl/download', async (req, res) => {
         // FFMPEG Embedding Lyrics Post-Process
         if (lyricsData && (type === 'audio' || type === 'opus')) {
             console.log("Adding lyrics metadata via ffmpeg...");
-            const lyricsText = lyricsData.raw;
-            const newFullPath = nodePath.join(tempDir, `lyric_${uniqueId}_${downloadedFile}`);
-
-            // For opus (ogg container), lyrics metadata key is 'lyrics'
-            // For mp3, 'lyrics' maps nicely to USLT via ffmpeg
-            const ffmpegArgs = [
-                '-i', fullPath,
-                '-c', 'copy',
-                '-metadata', `lyrics=${lyricsText}`,
-                newFullPath
-            ];
-
-            const result = spawnSync('ffmpeg', ffmpegArgs);
-            if (result.error || result.status !== 0) {
-                console.error("FFMPEG lyrics embedding failed:", result.stderr ? result.stderr.toString() : 'Unknown Error');
+            
+            // For opus format, ffmpeg's opus muxer rejects video streams so mapping existing thumbnail (picture stream)
+            // will cause ffmpeg to fail. If we skip mapping it, ffmpeg destroys the thumbnail.
+            // If the user checked embedThumbnail for an opus file, we must skip this destructive ffmpeg step.
+            if (type === 'opus' && embedThumbnail === 'true') {
+                console.log("Skipping ffmpeg post-process for opus to preserve yt-dlp thumbnail.");
             } else {
-                // Success! Delete old file, set fullPath to new file
-                try {
-                    fs.unlinkSync(fullPath);
-                } catch (e) { }
-                fullPath = newFullPath;
+                const lyricsText = lyricsData.raw;
+                const newFullPath = nodePath.join(tempDir, `lyric_${uniqueId}_${downloadedFile}`);
+
+                // For mp3, '-map 0' successfully preserves the thumbnail picture stream
+                const ffmpegArgs = [
+                    '-i', fullPath,
+                    '-map', '0',
+                    '-c', 'copy',
+                    '-metadata', `lyrics=${lyricsText}`,
+                    newFullPath
+                ];
+
+                const result = spawnSync('ffmpeg', ffmpegArgs);
+                if (result.error || result.status !== 0) {
+                    console.error("FFMPEG lyrics embedding failed:", result.stderr ? result.stderr.toString() : 'Unknown Error');
+                } else {
+                    // Success! Delete old file, set fullPath to new file
+                    try {
+                        fs.unlinkSync(fullPath);
+                    } catch (e) { }
+                    fullPath = newFullPath;
+                }
             }
         }
 

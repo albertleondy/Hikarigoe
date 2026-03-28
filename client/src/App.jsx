@@ -62,7 +62,7 @@ function App() {
     setQueuedVideos(queuedVideos.filter(v => v.id !== id));
   };
 
-  const downloadAllOpus = async () => {
+  const downloadAll = async (type) => {
     for (const video of queuedVideos) {
       let jobId = '';
       if (video.lyricsPayload) {
@@ -81,7 +81,7 @@ function App() {
 
       const iframe = document.createElement('iframe');
       iframe.style.display = 'none';
-      iframe.src = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(video.url)}&type=opus&embedThumbnail=${queueEmbedThumbnail}${jobId ? `&jobId=${jobId}` : ''}`;
+      iframe.src = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(video.url)}&type=${type}&embedThumbnail=${queueEmbedThumbnail}${jobId ? `&jobId=${jobId}` : ''}`;
       document.body.appendChild(iframe);
 
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -149,12 +149,19 @@ function App() {
             <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#b3b3b3', fontSize: '0.9rem', justifyContent: 'center' }}>
               <input
                 type="checkbox"
+                checked={queueEmbedThumbnail}
+                onChange={(e) => setQueueEmbedThumbnail(e.target.checked)}
               />
               Embed Thumbnail (Audio)
             </label>
-            <button className="action-button download-button" style={{ width: '100%', background: '#7f5af0', color: '#fff', border: 'none', padding: '15px', fontSize: '1rem', fontWeight: 'bold' }} onClick={downloadAllOpus}>
-              Download All (Opus)
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button className="action-button download-button" style={{ flex: 1, background: '#7f5af0', color: '#fff', border: 'none', padding: '15px', fontSize: '1rem', fontWeight: 'bold' }} onClick={() => downloadAll('opus')}>
+                All (Opus)
+              </button>
+              <button className="action-button download-button" style={{ flex: 1, background: '#2cb67d', color: '#fff', border: 'none', padding: '15px', fontSize: '1rem', fontWeight: 'bold' }} onClick={() => downloadAll('audio')}>
+                All (MP3)
+              </button>
+            </div>
           </div>
         </div>
       )}
