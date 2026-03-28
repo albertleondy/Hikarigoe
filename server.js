@@ -13,7 +13,20 @@ const PORT = 3001;
 
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+
+let browserCookieSetting = '';
+
+function getCookieArgs() {
+    if (browserCookieSetting) {
+        return ['--cookies-from-browser', browserCookieSetting];
+    }
+    const cookiesPath = nodePath.join(__dirname, 'cookies.txt');
+    if (fs.existsSync(cookiesPath)) {
+        return ['--cookies', cookiesPath];
+    }
+    return [];
+}
 
 const search = NeteaseApi.search;
 const lyric = NeteaseApi.lyric;
@@ -206,7 +219,8 @@ app.post('/api/ytdl/info', async (req, res) => {
 
     console.log(`\n📺 Fetching YouTube Info: ${url}`);
     try {
-        const metadata = await ytDlpWrap.getVideoInfo(url);
+        const stdout = await ytDlpWrap.execPromise([url, '--dump-json', ...getCookieArgs()]);
+        const metadata = JSON.parse(stdout);
         res.json({
             title: metadata.title,
             thumbnail: metadata.thumbnail,
@@ -225,12 +239,7 @@ app.get('/api/ytdl/search', async (req, res) => {
 
     console.log(`\n🔍 YouTube Search: ${q}`);
     try {
-        let args = [`ytsearch24:${q}`, '--dump-json', '--flat-playlist'];
-
-        const cookiesPath = nodePath.join(__dirname, 'cookies.txt');
-        if (fs.existsSync(cookiesPath)) {
-            args.push('--cookies', cookiesPath);
-        }
+        let args = [`ytsearch24:${q}`, '--dump-json', '--flat-playlist', ...getCookieArgs()];
 
         const stdout = await ytDlpWrap.execPromise(args);
         const results = stdout.trim().split('\n').map(line => {
@@ -259,7 +268,22 @@ app.get('/api/ytdl/search', async (req, res) => {
 app.get('/api/ytdl/status', (req, res) => {
     const cookiesPath = nodePath.join(__dirname, 'cookies.txt');
     const cookiesFound = fs.existsSync(cookiesPath);
-    res.json({ cookiesFound });
+    res.json({ cookiesFound, browserCookie: browserCookieSetting });
+});
+
+app.post('/api/ytdl/cookie_settings', (req, res) => {
+    const { browser, cookieText } = req.body;
+    try {
+        if (cookieText) {
+            fs.writeFileSync(nodePath.join(__dirname, 'cookies.txt'), cookieText);
+            browserCookieSetting = '';
+        } else if (browser !== undefined) {
+            browserCookieSetting = browser;
+        }
+        res.json({ success: true });
+    } catch(e) {
+        res.status(500).json({error: e.message});
+    }
 });
 
 const { spawnSync } = require('child_process');
@@ -302,19 +326,14 @@ app.get('/api/ytdl/download', async (req, res) => {
     const outputTemplate = `${tempBasePath}.%(ext)s`;
 
     try {
-        let args = [url];
-        const cookiesPath = nodePath.join(__dirname, 'cookies.txt');
-        if (fs.existsSync(cookiesPath)) {
-            args.push('--cookies', cookiesPath);
-        }
+        let args = [url, ...getCookieArgs()];
 
         if (embedThumbnail === 'true') {
             args.push('--embed-thumbnail');
         }
 
         let finalFilename = `download.${ext}`;
-        let metaArgs = [url, '--dump-json'];
-        if (fs.existsSync(cookiesPath)) metaArgs.push('--cookies', cookiesPath);
+        let metaArgs = [url, '--dump-json', ...getCookieArgs()];
 
         let title = 'download';
         try {

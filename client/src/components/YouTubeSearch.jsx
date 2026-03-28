@@ -7,16 +7,66 @@ const YouTubeSearch = ({ addToQueue, queuedVideos }) => {
     const [videoInfo, setVideoInfo] = useState(null);
     const [error, setError] = useState(null);
     const [cookieStatus, setCookieStatus] = useState(false);
+    const [browserCookie, setBrowserCookie] = useState('');
+    const [showSettings, setShowSettings] = useState(false);
+    const [uploading, setUploading] = useState(false);
     const [embedThumbnail, setEmbedThumbnail] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 8;
 
-    React.useEffect(() => {
+    const fetchStatus = () => {
         fetch('http://localhost:3001/api/ytdl/status')
             .then(res => res.json())
-            .then(data => setCookieStatus(data.cookiesFound))
+            .then(data => {
+                setCookieStatus(data.cookiesFound);
+                setBrowserCookie(data.browserCookie || '');
+            })
             .catch(err => console.error("Failed to check cookies", err));
+    };
+
+    React.useEffect(() => {
+        fetchStatus();
     }, []);
+
+    const handleFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setUploading(true);
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const text = event.target.result;
+            try {
+                await fetch('http://localhost:3001/api/ytdl/cookie_settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cookieText: text })
+                });
+                fetchStatus();
+                alert('Cookies updated successfully!');
+            } catch (err) {
+                alert('Failed to upload cookies');
+            }
+            setUploading(false);
+            e.target.value = null;
+        };
+        reader.readAsText(file);
+    };
+
+    const handleBrowserChange = async (e) => {
+        const browser = e.target.value;
+        setUploading(true);
+        try {
+            await fetch('http://localhost:3001/api/ytdl/cookie_settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ browser })
+            });
+            fetchStatus();
+        } catch (err) {
+            alert('Failed to update browser setting');
+        }
+        setUploading(false);
+    };
 
     const handleSearch = async (e) => {
         e.preventDefault();
@@ -66,10 +116,39 @@ const YouTubeSearch = ({ addToQueue, queuedVideos }) => {
     return (
         <div className="youtube-fetcher-container fadeIn" style={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1, minHeight: 0 }}>
             <div className="status-bar" style={{ textAlign: 'center', marginBottom: '10px', flexShrink: 0 }}>
-                <span className={`cookie-badge ${cookieStatus ? 'active' : 'inactive'}`}>
-                    {cookieStatus ? '🍪 Premium/Cookies Detected' : '⚪ No Cookies Detected'}
+                <span className={`cookie-badge ${cookieStatus || browserCookie ? 'active' : 'inactive'}`} style={{ cursor: 'pointer', padding: '6px 12px', borderRadius: '20px', display: 'inline-block' }} onClick={() => setShowSettings(!showSettings)}>
+                    {browserCookie ? `🍪 Browser Cookies: ${browserCookie}` : (cookieStatus ? '🍪 Premium/Cookies Detected' : '⚪ No Cookies Detected')} ⚙️
                 </span>
             </div>
+
+            {showSettings && (
+                <div className="glass-card fadeIn" style={{ maxWidth: '600px', margin: '0 auto 20px auto', padding: '15px', display: 'flex', flexDirection: 'column', gap: '15px', textAlign: 'left' }}>
+                    <h4 style={{ margin: 0, color: '#fff' }}>Cookie Settings</h4>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#b3b3b3' }}>
+                        Providing cookies allows downloading age-restricted or premium content in the highest quality.
+                    </p>
+                    <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ flex: 1, minWidth: '200px' }}>
+                            <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem', color: '#fff' }}>Upload cookies.txt</label>
+                            <input type="file" accept=".txt" onChange={handleFileUpload} disabled={uploading} style={{ color: '#b3b3b3', fontSize: '0.9rem', width: '100%' }} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: '200px' }}>
+                            <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem', color: '#fff' }}>Or Use Browser Cookies</label>
+                            <select value={browserCookie} onChange={handleBrowserChange} disabled={uploading} style={{ width: '100%', padding: '8px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)' }}>
+                                <option value="" style={{ color: '#000' }}>-- None --</option>
+                                <option value="chrome" style={{ color: '#000' }}>Chrome</option>
+                                <option value="edge" style={{ color: '#000' }}>Edge</option>
+                                <option value="firefox" style={{ color: '#000' }}>Firefox</option>
+                                <option value="zen" style={{ color: '#000' }}>Zen Browser</option>
+                                <option value="brave" style={{ color: '#000' }}>Brave</option>
+                                <option value="opera" style={{ color: '#000' }}>Opera</option>
+                                <option value="safari" style={{ color: '#000' }}>Safari</option>
+                                <option value="vivaldi" style={{ color: '#000' }}>Vivaldi</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <form onSubmit={handleSearch} className="search-form" style={{ maxWidth: '600px', margin: '0 auto 20px auto', width: '100%', flexShrink: 0 }}>
                 <input
