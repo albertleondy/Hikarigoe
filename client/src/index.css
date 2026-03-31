@@ -565,4 +565,17 @@ body {
   .right-panel {
     height: 500px;
   }
-}
+
+  .queue-item {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .queue-item:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: var(--accent-color) !important;
+    transform: translateX(4px);
+  }
+
+  .queue-item:active {
+    transform: scale(0.98);
+  }

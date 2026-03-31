@@ -153,7 +153,7 @@ function App() {
                 onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.border = '1px solid #7f5af0'; }}
                 onDragLeave={(e) => { e.currentTarget.style.border = 'none'; }}
                 onDrop={(e) => { e.currentTarget.style.border = 'none'; handleDrop(e, video.id); }}
-                style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '12px', position: 'relative', overflow: 'hidden', transition: 'border 0.2s', border: '1px solid transparent' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '12px', position: 'relative', overflow: 'hidden', transition: 'all 0.2s ease', border: '1px solid transparent', height: '80px', flexShrink: 0, boxSizing: 'border-box' }}
               >
                 <img src={video.thumbnail} alt="thumb" style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
