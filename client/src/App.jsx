@@ -116,9 +116,35 @@ function App() {
 
       {queuedVideos.length > 0 && (currentView === 'youtube-search' || currentView === 'lyrics') && (
         <div className="queue-sidebar glass-card" style={{ width: '320px', flexShrink: 0, padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'stretch', height: '100%', boxSizing: 'border-box' }}>
-          <h3 style={{ marginTop: 0, marginBottom: '15px', textAlign: 'center', fontSize: '1.2rem', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px', flexShrink: 0 }}>
-            Download Queue ({queuedVideos.length})
-          </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px', flexShrink: 0 }}>
+            <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>
+              Queue ({queuedVideos.length})
+            </h3>
+            <button
+              onClick={() => setQueuedVideos([])}
+              style={{
+                background: 'rgba(255, 77, 77, 0.1)',
+                border: '1px solid rgba(255, 77, 77, 0.3)',
+                color: '#ff4d4d',
+                padding: '4px 10px',
+                borderRadius: '15px',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                fontWeight: 'bold'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = 'rgba(255, 77, 77, 0.2)';
+                e.target.style.borderColor = '#ff4d4d';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = 'rgba(255, 77, 77, 0.1)';
+                e.target.style.borderColor = 'rgba(255, 77, 77, 0.3)';
+              }}
+            >
+              Clear All
+            </button>
+          </div>
           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: '10px', paddingRight: '5px', width: '100%' }}>
             {queuedVideos.map(video => (
               <div
