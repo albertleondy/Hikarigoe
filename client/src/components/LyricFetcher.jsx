@@ -70,56 +70,62 @@ const LyricFetcher = () => {
     };
 
     return (
-        <div className="main-content fadeIn">
+        <div className="flex flex-col md:flex-row gap-6 h-full min-h-0 animate-fade-in w-full">
             {/* LEFT PANEL: SEARCH & LIST */}
-            <div className="panel left-panel">
-                <form onSubmit={handleSearch} className="search-form">
+            <div className="w-full md:w-1/3 flex flex-col gap-4 bg-base-200/40 border border-white/5 rounded-3xl p-5 shadow-inner shrink-0">
+                <form onSubmit={handleSearch} className="flex gap-2 w-full shrink-0">
                     <input
                         type="text"
-                        className="search-input"
+                        className="input input-bordered input-primary flex-1 shadow-sm"
                         placeholder="Enter song title..."
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                     />
-                    <button type="submit" className="search-button" disabled={loadingSearch}>
-                        {loadingSearch ? '...' : 'Search'}
+                    <button type="submit" className="btn btn-primary shadow-md shadow-primary/20" disabled={loadingSearch}>
+                        {loadingSearch ? <span className="loading loading-spinner loading-sm"></span> : 'Search'}
                     </button>
                 </form>
 
-                <div className="results-list-container">
-                    {error && <div className="error-message">{error}</div>}
+                <div className="flex-1 overflow-y-auto flex flex-col gap-3 pr-2 custom-scrollbar">
+                    {error && <div className="alert alert-error text-sm shadow-md shrink-0 py-2">{error}</div>}
 
                     {searchResults.length === 0 && !loadingSearch && (
-                        <div className="empty-state-text">Search for a song to see results here.</div>
+                        <div className="text-center text-base-content/50 italic mt-10">
+                            Search for a song to see results here.
+                        </div>
                     )}
 
-                    <div className="results-list">
-                        {searchResults.map((song) => (
-                            <div key={`${song.source}-${song.id}`} className="song-item" onClick={() => handleSelectSong(song)}>
-                                <div className="song-info">
-                                    <div className="song-name">{song.name}</div>
-                                    <div className="song-artist">{song.artist}</div>
-                                    <div className="song-meta">{song.album}</div>
-                                </div>
-                                <div className="song-source">
-                                    <span className={`source-tag ${song.source.toLowerCase()}`}>{song.source}</span>
-                                </div>
+                    {searchResults.map((song) => (
+                        <div
+                            key={`${song.source}-${song.id}`}
+                            className="bg-base-300/50 hover:bg-base-300 border border-transparent hover:border-primary/50 transition-all duration-200 rounded-xl p-3 cursor-pointer flex justify-between items-center group shadow-sm hover:shadow-primary/10"
+                            onClick={() => handleSelectSong(song)}
+                        >
+                            <div className="flex-1 min-w-0 pr-3">
+                                <div className="font-bold text-white text-md truncate group-hover:text-primary transition-colors">{song.name}</div>
+                                <div className="text-sm text-base-content/70 truncate">{song.artist}</div>
+                                <div className="text-xs text-base-content/50 truncate mt-1">{song.album}</div>
                             </div>
-                        ))}
-                    </div>
+                            <div className="shrink-0 flex items-center">
+                                <span className={`badge badge-sm uppercase font-bold tracking-wider ${song.source.toLowerCase() === 'netease' ? 'badge-error badge-outline' : 'badge-success badge-outline'}`}>
+                                    {song.source}
+                                </span>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
 
             {/* RIGHT PANEL: LYRICS DISPLAY */}
-            <div className="panel right-panel">
+            <div className="w-full md:w-2/3 flex flex-col bg-base-300/80 backdrop-blur-md rounded-3xl shadow-2xl border border-white/5 overflow-hidden relative">
                 {loadingLyrics ? (
-                    <div className="loading-container">
-                        <div className="spinner"></div>
-                        <p>Fetching & Converting Lyrics...</p>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-base-300/50 backdrop-blur-sm z-10">
+                        <span className="loading loading-ring loading-lg text-primary"></span>
+                        <p className="font-medium text-primary tracking-widest animate-pulse">Fetching & Converting Lyrics...</p>
                     </div>
                 ) : selectedLyrics ? (
                     <div
-                        className="result-container fadeIn"
+                        className="flex flex-col h-full items-center p-6 animate-fade-in relative group"
                         draggable
                         onDragStart={(e) => {
                             const lrcContent = selectedLyrics.lyrics.map(l => `${l.timestamp} ${l.romaji}`).join('\n');
@@ -128,37 +134,45 @@ const LyricFetcher = () => {
                                 raw: lrcContent
                             };
                             e.dataTransfer.setData('application/json', JSON.stringify(payload));
-                            e.dataTransfer.effectAllowed = 'copy'; // Optional cursor styling
+                            e.dataTransfer.effectAllowed = 'copy';
                         }}
                         style={{ cursor: 'grab' }}
                         title="Drag me into a video in your Download Queue!"
                     >
-                        <div className="song-header">
-                            <h2>{selectedLyrics.song}</h2>
-                            <h3>{selectedLyrics.artist}</h3>
-                            <span className="source-badge">Source: {selectedLyrics.source}</span>
-                            <p style={{ margin: '10px 0 0 0', fontSize: '0.8rem', color: '#ff7eb3' }}>✨ Drag this card into your queue to embed! ✨</p>
+                        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-primary/20 text-primary px-3 py-1 text-xs rounded-full font-bold flex items-center gap-2">
+                            <span className="animate-bounce">↑</span> Drag to Queue
                         </div>
 
-                        <div className="lyrics-scroll">
+                        <div className="text-center border-b border-white/10 pb-4 w-full shrink-0">
+                            <h2 className="text-3xl font-bold text-white m-0 tracking-tight">{selectedLyrics.song}</h2>
+                            <h3 className="text-lg text-base-content/70 m-0 mt-1">{selectedLyrics.artist}</h3>
+                            <div className="mt-3 flex flex-col items-center gap-2">
+                                <span className="badge badge-neutral shadow-sm">Source: {selectedLyrics.source}</span>
+                                <p className="text-xs font-semibold text-secondary animate-pulse m-0 bg-secondary/10 px-3 py-1 rounded-full">
+                                    ✨ Drag this card into your queue to embed! ✨
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 w-full overflow-y-auto px-4 py-6 text-center text-lg leading-relaxed relative custom-scrollbar">
                             {selectedLyrics.lyrics.map((line, index) => (
-                                <div key={index} className="lyric-line">
-                                    {line.romaji && <div className="romaji">{line.romaji}</div>}
-                                    {line.original && <div className="original">{line.original}</div>}
-                                    {!line.original && !line.romaji && <br />}
+                                <div key={index} className="mb-6 hover:bg-white/5 rounded-lg py-1 transition-colors">
+                                    {line.romaji && <div className="text-primary font-medium">{line.romaji}</div>}
+                                    {line.original && <div className="text-white/90 text-xl font-bold">{line.original}</div>}
+                                    {!line.original && !line.romaji && <div className="h-6"></div>}
                                 </div>
                             ))}
                         </div>
 
-                        <div className="button-group">
+                        <div className="flex gap-4 w-full shrink-0 justify-center pt-4 border-t border-white/10">
                             <button
-                                className="action-button copy-button"
+                                className="btn btn-outline hover:text-white"
                                 onClick={() => navigator.clipboard.writeText(selectedLyrics.lyrics.map(l => `${l.timestamp} ${l.romaji}`).join('\n'))}
                             >
                                 Copy to Clipboard
                             </button>
                             <button
-                                className="action-button download-button"
+                                className="btn btn-primary shadow-lg shadow-primary/20"
                                 onClick={handleDownload}
                             >
                                 Download .lrc
@@ -166,7 +180,10 @@ const LyricFetcher = () => {
                         </div>
                     </div>
                 ) : (
-                    <div className="empty-state">
+                    <div className="h-full flex flex-col items-center justify-center text-base-content/40 italic">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 mb-4 opacity-20">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 19.5V15a2.25 2.25 0 012.25-2.25H15M9 19.5a2.25 2.25 0 002.25 2.25H15M9 19.5L5.25 15.75M15 21.75a2.25 2.25 0 002.25-2.25V15a2.25 2.25 0 00-2.25-2.25h-3.75" />
+                        </svg>
                         <p>Select a song from the list to view lyrics</p>
                     </div>
                 )}
