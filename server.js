@@ -307,11 +307,11 @@ app.post('/api/ytdl/prepare_lyrics', (req, res) => {
 });
 
 app.get('/api/ytdl/download', async (req, res) => {
-    const { url, type, embedThumbnail, jobId } = req.query;
+    const { url, type, embedThumbnail, jobId, startTime, endTime } = req.query;
     if (!url || !type) return res.status(400).json({ error: 'URL and type are required' });
 
     const lyricsData = jobId ? lyricsJobs.get(jobId) : null;
-    console.log(`\n📥 Downloading ${type} from: ${url} (Embed Thumb: ${embedThumbnail}, Has Lyrics: ${!!lyricsData})`);
+    console.log(`\n📥 Downloading ${type} from: ${url} (Embed Thumb: ${embedThumbnail}, Has Lyrics: ${!!lyricsData}, Trim: ${startTime}-${endTime})`);
 
     const tempDir = nodePath.join(__dirname, 'temp_downloads');
     if (!fs.existsSync(tempDir)) {
@@ -331,6 +331,17 @@ app.get('/api/ytdl/download', async (req, res) => {
 
         if (embedThumbnail === 'true') {
             args.push('--embed-thumbnail');
+        }
+
+        // Add video trimming if requested
+        if (startTime !== undefined && endTime !== undefined) {
+            const start = parseFloat(startTime);
+            const end = parseFloat(endTime);
+            if (!isNaN(start) && !isNaN(end) && start < end) {
+                // Format: *START-END in seconds
+                args.push('--download-sections', `*${start}-${end}`);
+                console.log(`🎬 Trimming video from ${start}s to ${end}s`);
+            }
         }
 
         let finalFilename = `download.${ext}`;

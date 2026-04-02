@@ -23,6 +23,12 @@ function App() {
     setQueuedVideos(queuedVideos.filter(v => v.id !== id));
   };
 
+  const removeLyricsFromVideo = (id) => {
+    setQueuedVideos(queuedVideos.map(v =>
+      v.id === id ? { ...v, lyricsPayload: null } : v
+    ));
+  };
+
   const downloadAll = async (type) => {
     for (const video of queuedVideos) {
       let jobId = '';
@@ -115,8 +121,15 @@ function App() {
                   <MarqueeTitle text={video.title} />
                   {video.lyricsPayload && (
                     <p className="m-0 text-[0.7rem] text-primary whitespace-nowrap overflow-hidden text-ellipsis font-semibold flex items-center gap-1">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3"><path d="M10 2a.75.75 0 01.75.75v5.59l1.95-2.1a.75.75 0 111.1 1.02l-3.25 3.5a.75.75 0 01-1.1 0L6.2 7.26a.75.75 0 111.1-1.02l1.95 2.1V2.75A.75.75 0 0110 2z" /><path d="M5.273 4.5a1.25 1.25 0 00-1.205.918l-1.523 5.52c-.006.024-.01.048-.014.074A6.56 6.56 0 013 14.65a6.5 6.5 0 005.323 1.83.75.75 0 00.71-1.24A4.986 4.986 0 016 11.5a4.986 4.986 0 01-2.9-1.28l1.1-3.98A.25.25 0 014.542 6h1.22l.509-2.5h-1zm9.454 0a1.25 1.25 0 011.205.918l1.523 5.52c.006.024.01.048.014.074A6.56 6.56 0 0017 14.65a6.5 6.5 0 01-5.323 1.83.75.75 0 01-.71-1.24 4.986 4.986 0 003.033-3.74 4.986 4.986 0 002.9-1.28l-1.1-3.98a.25.25 0 00-.341-.22h-1.22l-.509-2.5h1z" /></svg>
-                      {video.lyricsPayload.title}
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 shrink-0"><path d="M10 2a.75.75 0 01.75.75v5.59l1.95-2.1a.75.75 0 111.1 1.02l-3.25 3.5a.75.75 0 01-1.1 0L6.2 7.26a.75.75 0 111.1-1.02l1.95 2.1V2.75A.75.75 0 0110 2z" /><path d="M5.273 4.5a1.25 1.25 0 00-1.205.918l-1.523 5.52c-.006.024-.01.048-.014.074A6.56 6.56 0 013 14.65a6.5 6.5 0 005.323 1.83.75.75 0 00.71-1.24A4.986 4.986 0 016 11.5a4.986 4.986 0 01-2.9-1.28l1.1-3.98A.25.25 0 014.542 6h1.22l.509-2.5h-1zm9.454 0a1.25 1.25 0 011.205.918l1.523 5.52c.006.024.01.048.014.074A6.56 6.56 0 0017 14.65a6.5 6.5 0 01-5.323 1.83.75.75 0 01-.71-1.24 4.986 4.986 0 003.033-3.74 4.986 4.986 0 002.9-1.28l-1.1-3.98a.25.25 0 00-.341-.22h-1.22l-.509-2.5h1z" /></svg>
+                      <span className="truncate">{video.lyricsPayload.title}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removeLyricsFromVideo(video.id); }}
+                        className="bg-transparent border-none text-primary/50 hover:text-error cursor-pointer text-sm p-0 leading-none shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ml-1"
+                        title="Remove lyrics"
+                      >
+                        ×
+                      </button>
                     </p>
                   )}
                 </div>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import MarqueeTitle from './MarqueeTitle';
+import VideoTrimmer from './VideoTrimmer';
 
 const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo }) => {
     const [query, setQuery] = useState('');
@@ -13,6 +14,7 @@ const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo }) => {
     const [uploading, setUploading] = useState(false);
     const [embedThumbnail, setEmbedThumbnail] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
+    const [trimRange, setTrimRange] = useState({ startTime: 0, endTime: 0 });
     const ITEMS_PER_PAGE = 8;
 
     const fetchStatus = () => {
@@ -99,7 +101,19 @@ const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo }) => {
 
     const handleDownload = (type, url = query) => {
         if (!url) return;
-        window.location.href = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(url)}&type=${type}&embedThumbnail=${embedThumbnail}`;
+        let downloadUrl = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(url)}&type=${type}&embedThumbnail=${embedThumbnail}`;
+
+        // Only add trim parameters if user has actually trimmed the video and values are valid
+        const hasValidTrim = trimRange.endTime > 0 &&
+                            trimRange.startTime < trimRange.endTime &&
+                            (trimRange.startTime > 0 || trimRange.endTime < (videoInfo?.duration || Infinity));
+
+        if (hasValidTrim) {
+            downloadUrl += `&startTime=${trimRange.startTime}&endTime=${trimRange.endTime}`;
+        }
+
+        console.log('Downloading with URL:', downloadUrl);
+        window.location.href = downloadUrl;
     };
 
     const selectVideo = (video) => {
@@ -230,6 +244,11 @@ const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo }) => {
                 {videoInfo && (() => {
                     const videoUrl = typeof query === 'string' && query.includes('youtube.com') ? query : `https://www.youtube.com/watch?v=${videoInfo.id}`;
                     const videoId = videoInfo.id || videoUrl.match(/[?&]v=([^&]+)/)?.[1] || videoUrl.match(/youtu\.be\/([^?]+)/)?.[1];
+
+                    const handleVideoDownload = (type) => {
+                        handleDownload(type, videoUrl);
+                    };
+
                     return (
                         <div className="flex flex-col lg:flex-row gap-6 w-full h-full min-h-0 overflow-y-auto custom-scrollbar pr-2 mt-4">
                             {/* LEFT: MEDIA SIDE */}
@@ -305,20 +324,27 @@ const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo }) => {
                                             />
                                         </label>
 
+                                        {videoInfo.duration && (
+                                            <VideoTrimmer
+                                                duration={videoInfo.duration}
+                                                onTrimChange={setTrimRange}
+                                            />
+                                        )}
+
                                         <div className="card-actions flex-col sm:flex-row justify-center gap-3 mt-6 w-full">
-                                            <button className="btn btn-neutral flex-1 py-3 h-auto" onClick={() => handleDownload('video')}>
+                                            <button className="btn btn-neutral flex-1 py-3 h-auto" onClick={() => handleVideoDownload('video')}>
                                                 <div className="flex flex-col items-center">
                                                     <span className="font-bold">MP4</span>
                                                     <span className="text-[0.65rem] opacity-60">High Quality Video</span>
                                                 </div>
                                             </button>
-                                            <button className="btn btn-secondary shadow-lg shadow-secondary/20 flex-1 py-3 h-auto" onClick={() => handleDownload('audio')}>
+                                            <button className="btn btn-secondary shadow-lg shadow-secondary/20 flex-1 py-3 h-auto" onClick={() => handleVideoDownload('audio')}>
                                                 <div className="flex flex-col items-center">
                                                     <span className="font-bold">MP3</span>
                                                     <span className="text-[0.65rem] opacity-80">Standard Audio</span>
                                                 </div>
                                             </button>
-                                            <button className="btn btn-primary shadow-lg shadow-primary/20 flex-1 py-3 h-auto" onClick={() => handleDownload('opus')}>
+                                            <button className="btn btn-primary shadow-lg shadow-primary/20 flex-1 py-3 h-auto" onClick={() => handleVideoDownload('opus')}>
                                                 <div className="flex flex-col items-center">
                                                     <span className="font-bold text-white">Opus</span>
                                                     <span className="text-[0.65rem] text-white/80">Highest Quality Audio</span>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import VideoTrimmer from './VideoTrimmer';
 
 const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
     const [url, setUrl] = useState('');
@@ -10,6 +11,7 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
     const [showSettings, setShowSettings] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [embedThumbnail, setEmbedThumbnail] = useState(false);
+    const [trimRange, setTrimRange] = useState({ startTime: 0, endTime: 0 });
 
     const fetchStatus = () => {
         fetch('http://localhost:3001/api/ytdl/status')
@@ -89,7 +91,19 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
 
     const handleDownload = (type) => {
         if (!url) return;
-        window.location.href = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(url)}&type=${type}&embedThumbnail=${embedThumbnail}`;
+        let downloadUrl = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(url)}&type=${type}&embedThumbnail=${embedThumbnail}`;
+
+        // Only add trim parameters if user has actually trimmed the video and values are valid
+        const hasValidTrim = trimRange.endTime > 0 &&
+                            trimRange.startTime < trimRange.endTime &&
+                            (trimRange.startTime > 0 || trimRange.endTime < (videoInfo?.duration || Infinity));
+
+        if (hasValidTrim) {
+            downloadUrl += `&startTime=${trimRange.startTime}&endTime=${trimRange.endTime}`;
+        }
+
+        console.log('Downloading with URL:', downloadUrl);
+        window.location.href = downloadUrl;
     };
 
     return (
@@ -229,6 +243,13 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
                                             onChange={e => setEmbedThumbnail(e.target.checked)}
                                         />
                                     </label>
+
+                                    {videoInfo.duration && (
+                                        <VideoTrimmer
+                                            duration={videoInfo.duration}
+                                            onTrimChange={setTrimRange}
+                                        />
+                                    )}
 
                                     <div className="card-actions flex-col sm:flex-row justify-center gap-4 mt-6 w-full">
                                         <button className="btn btn-neutral flex-1 py-4 h-auto shadow-md hover:shadow-lg" onClick={() => handleDownload('video')}>
