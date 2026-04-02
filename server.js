@@ -222,6 +222,7 @@ app.post('/api/ytdl/info', async (req, res) => {
         const stdout = await ytDlpWrap.execPromise([url, '--dump-json', ...getCookieArgs()]);
         const metadata = JSON.parse(stdout);
         res.json({
+            id: metadata.id,
             title: metadata.title,
             thumbnail: metadata.thumbnail,
             duration: metadata.duration,
@@ -239,7 +240,7 @@ app.get('/api/ytdl/search', async (req, res) => {
 
     console.log(`\n🔍 YouTube Search: ${q}`);
     try {
-        let args = [`ytsearch24:${q}`, '--dump-json', '--flat-playlist', ...getCookieArgs()];
+        let args = [`ytsearch80:${q}`, '--dump-json', '--flat-playlist', ...getCookieArgs()];
 
         const stdout = await ytDlpWrap.execPromise(args);
         const results = stdout.trim().split('\n').map(line => {
@@ -281,8 +282,8 @@ app.post('/api/ytdl/cookie_settings', (req, res) => {
             browserCookieSetting = browser;
         }
         res.json({ success: true });
-    } catch(e) {
-        res.status(500).json({error: e.message});
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
 
@@ -377,7 +378,7 @@ app.get('/api/ytdl/download', async (req, res) => {
         // FFMPEG Embedding Lyrics Post-Process
         if (lyricsData && (type === 'audio' || type === 'opus')) {
             console.log("Adding lyrics metadata via ffmpeg...");
-            
+
             // For opus format, ffmpeg's opus muxer rejects video streams so mapping existing thumbnail (picture stream)
             // will cause ffmpeg to fail. If we skip mapping it, ffmpeg destroys the thumbnail.
             // If the user checked embedThumbnail for an opus file, we must skip this destructive ffmpeg step.

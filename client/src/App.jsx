@@ -11,6 +11,7 @@ function App() {
   const [currentView, setCurrentView] = useState('lyrics'); // 'lyrics', 'youtube-dl', or 'youtube-search'
   const [queuedVideos, setQueuedVideos] = useState([]);
   const [queueEmbedThumbnail, setQueueEmbedThumbnail] = useState(false);
+  const [externalSelectedVideo, setExternalSelectedVideo] = useState(null);
 
   const addToQueue = (video) => {
     if (!queuedVideos.find(v => v.id === video.id)) {
@@ -77,12 +78,12 @@ function App() {
 
         <div className="flex-1 overflow-hidden relative mt-2 w-full max-w-6xl mx-auto flex flex-col">
           {currentView === 'lyrics' && <LyricFetcher />}
-          {currentView === 'youtube-dl' && <YouTubeFetcher />}
-          {currentView === 'youtube-search' && <YouTubeSearch addToQueue={addToQueue} queuedVideos={queuedVideos} />}
+          {currentView === 'youtube-dl' && <YouTubeFetcher addToQueue={addToQueue} queuedVideos={queuedVideos} />}
+          {currentView === 'youtube-search' && <YouTubeSearch addToQueue={addToQueue} queuedVideos={queuedVideos} externalSelectedVideo={externalSelectedVideo} />}
         </div>
       </div>
 
-      {queuedVideos.length > 0 && (currentView === 'youtube-search' || currentView === 'lyrics') && (
+      {queuedVideos.length > 0 && (
         <div className="w-80 glass-effect rounded-3xl flex flex-col p-5 shrink-0 z-10 transition-all duration-300">
           <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-3 shrink-0">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -100,12 +101,16 @@ function App() {
             {queuedVideos.map(video => (
               <div
                 key={video.id}
-                className="group flex items-center gap-3 bg-white/5 hover:bg-white/10 p-3 rounded-xl relative overflow-hidden transition-all duration-200 border border-transparent hover:border-primary/50 cursor-grab"
+                className="group flex items-center gap-3 bg-white/5 hover:bg-white/10 p-3 rounded-xl relative overflow-hidden transition-all duration-200 border border-transparent hover:border-primary/50 cursor-pointer"
                 onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-primary', 'bg-primary/10'); }}
                 onDragLeave={(e) => { e.currentTarget.classList.remove('border-primary', 'bg-primary/10'); }}
                 onDrop={(e) => { e.currentTarget.classList.remove('border-primary', 'bg-primary/10'); handleDrop(e, video.id); }}
+                onClick={() => {
+                  setCurrentView('youtube-search');
+                  setExternalSelectedVideo(video);
+                }}
               >
-                <img src={video.thumbnail} alt="thumb" className="w-16 h-10 object-cover rounded-md shrink-0 shadow-md" />
+                <img src={video.thumbnail} alt="thumb" className="w-16 h-10 object-cover rounded-md shrink-0 shadow-md pointer-events-none" />
                 <div className="flex-1 min-w-0 flex flex-col gap-1 justify-center">
                   <MarqueeTitle text={video.title} />
                   {video.lyricsPayload && (
@@ -116,7 +121,7 @@ function App() {
                   )}
                 </div>
                 <button
-                  onClick={() => removeFromQueue(video.id)}
+                  onClick={(e) => { e.stopPropagation(); removeFromQueue(video.id); }}
                   className="bg-transparent border-none text-error/70 hover:text-error cursor-pointer text-xl p-1 leading-none shrink-0 opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0"
                   title="Remove"
                 >

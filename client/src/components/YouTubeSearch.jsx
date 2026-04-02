@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import MarqueeTitle from './MarqueeTitle';
 
-const YouTubeSearch = ({ addToQueue, queuedVideos }) => {
+const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo }) => {
     const [query, setQuery] = useState('');
     const [loading, setLoading] = useState(false);
     const [searchResults, setSearchResults] = useState([]);
@@ -28,6 +28,12 @@ const YouTubeSearch = ({ addToQueue, queuedVideos }) => {
     React.useEffect(() => {
         fetchStatus();
     }, []);
+
+    React.useEffect(() => {
+        if (externalSelectedVideo) {
+            selectVideo(externalSelectedVideo);
+        }
+    }, [externalSelectedVideo]);
 
     const handleFileUpload = async (e) => {
         const file = e.target.files[0];
@@ -98,12 +104,12 @@ const YouTubeSearch = ({ addToQueue, queuedVideos }) => {
 
     const selectVideo = (video) => {
         setVideoInfo({
+            id: video.id,
             title: video.title,
             thumbnail: video.thumbnail,
             duration: video.duration,
             channel: video.channel
         });
-        setQuery(video.url);
     };
 
     const handleAddToQueue = (e, video) => {
@@ -221,48 +227,114 @@ const YouTubeSearch = ({ addToQueue, queuedVideos }) => {
                     </div>
                 )}
 
-                {videoInfo && (
-                    <div className="card w-full max-w-xl mx-auto bg-base-300 shadow-2xl h-fit max-h-full overflow-y-auto">
-                        <figure className="bg-black/40 pt-4">
-                            <img src={videoInfo.thumbnail} alt={videoInfo.title} className="max-h-64 object-contain rounded-xl shadow-lg border border-white/10" />
-                        </figure>
-                        <div className="card-body items-center text-center px-4 md:px-8">
-                            <h2 className="card-title text-2xl text-white">{videoInfo.title}</h2>
-                            <p className="text-base-content/70 font-medium m-0">{videoInfo.channel}</p>
-                            {videoInfo.duration && (
-                                <p className="text-primary font-mono text-sm m-0">
-                                    Length: {new Date(videoInfo.duration * 1000).toISOString().substr(11, 8).replace(/^00:/, '')}
-                                </p>
-                            )}
-
-                            <label className="label cursor-pointer justify-center gap-3 mt-4 hover:bg-white/5 p-2 rounded-lg transition-colors w-full">
-                                <span className="label-text">Embed Thumbnail (Audio)</span>
-                                <input
-                                    type="checkbox"
-                                    className="toggle toggle-primary"
-                                    checked={embedThumbnail}
-                                    onChange={e => setEmbedThumbnail(e.target.checked)}
-                                />
-                            </label>
-
-                            <div className="card-actions flex-col md:flex-row justify-center gap-3 mt-6 w-full">
-                                <button className="btn btn-neutral flex-1" onClick={() => handleDownload('video')}>
-                                    Video (MP4)
-                                </button>
-                                <button className="btn btn-secondary shadow-lg shadow-secondary/20 flex-1" onClick={() => handleDownload('audio')}>
-                                    Audio (MP3)
-                                </button>
-                                <button className="btn btn-primary shadow-lg shadow-primary/20 flex-1" onClick={() => handleDownload('opus')}>
-                                    Audio (Opus)
-                                </button>
+                {videoInfo && (() => {
+                    const videoUrl = typeof query === 'string' && query.includes('youtube.com') ? query : `https://www.youtube.com/watch?v=${videoInfo.id}`;
+                    const videoId = videoInfo.id || videoUrl.match(/[?&]v=([^&]+)/)?.[1] || videoUrl.match(/youtu\.be\/([^?]+)/)?.[1];
+                    return (
+                        <div className="flex flex-col lg:flex-row gap-6 w-full h-full min-h-0 overflow-y-auto custom-scrollbar pr-2 mt-4">
+                            {/* LEFT: MEDIA SIDE */}
+                            <div className="w-full lg:w-1/2 flex flex-col gap-4 shrink-0">
+                                <div className="card bg-black shadow-2xl border border-white/10 overflow-hidden w-full aspect-video rounded-2xl relative">
+                                    {videoId ? (
+                                        <iframe
+                                            width="100%" height="100%"
+                                            src={`https://www.youtube.com/embed/${videoId}?autoplay=0`}
+                                            title="YouTube video player"
+                                            frameBorder="0"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                            allowFullScreen
+                                            className="absolute inset-0"
+                                        ></iframe>
+                                    ) : (
+                                        <figure className="h-full w-full">
+                                            <img src={videoInfo.thumbnail} alt={videoInfo.title} className="w-full h-full object-contain" />
+                                        </figure>
+                                    )}
+                                </div>
+                                <div className="flex flex-col gap-3 bg-base-300/50 p-5 rounded-xl border border-white/5">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-base-content/60 font-semibold">Watch on YouTube</span>
+                                        <a href={videoUrl} target="_blank" rel="noreferrer" className="btn btn-sm btn-info shadow-md shadow-info/20">
+                                            Open Link ↗
+                                        </a>
+                                    </div>
+                                    {(() => {
+                                        const fullVideo = {
+                                            id: videoInfo.id,
+                                            title: videoInfo.title,
+                                            url: videoUrl,
+                                            thumbnail: videoInfo.thumbnail,
+                                            duration: videoInfo.duration,
+                                            channel: videoInfo.channel
+                                        };
+                                        const inQueue = queuedVideos.find(v => v.id === videoInfo.id);
+                                        return (
+                                            <button
+                                                className={`btn w-full shadow-md ${inQueue ? 'btn-success text-white pointer-events-none' : 'btn-outline btn-primary'}`}
+                                                onClick={() => addToQueue(fullVideo)}
+                                            >
+                                                {inQueue ? '✓ Added to Queue' : '+ Add to Download Queue'}
+                                            </button>
+                                        );
+                                    })()}
+                                </div>
                             </div>
 
-                            <button className="btn btn-ghost btn-sm mt-6 text-base-content/60 hover:text-white" onClick={() => setVideoInfo(null)}>
-                                ← Back to Search Results
-                            </button>
+                            {/* RIGHT: METADATA & ACTIONS */}
+                            <div className="w-full lg:w-1/2 flex flex-col h-fit">
+                                <div className="card w-full bg-base-300 shadow-2xl overflow-hidden border border-white/5">
+                                    <div className="card-body px-6 md:px-8 py-8">
+                                        <h2 className="card-title text-2xl text-white mb-0 leading-tight">{videoInfo.title}</h2>
+                                        <p className="text-base-content/70 font-bold m-0 mt-1 text-lg">{videoInfo.channel}</p>
+
+                                        {videoInfo.duration && (
+                                            <div className="badge badge-primary badge-outline mt-3 px-3 py-3 font-mono font-bold text-sm">
+                                                Length: {new Date(videoInfo.duration * 1000).toISOString().substr(11, 8).replace(/^00:/, '')}
+                                            </div>
+                                        )}
+
+                                        <div className="divider opacity-30 my-6">Download Options</div>
+
+                                        <label className="label cursor-pointer justify-center gap-3 hover:bg-white/5 p-3 rounded-xl transition-colors w-full border border-base-100 bg-base-100/30">
+                                            <span className="label-text text-base font-semibold">Embed Thumbnail (Audio)</span>
+                                            <input
+                                                type="checkbox"
+                                                className="toggle toggle-primary toggle-md"
+                                                checked={embedThumbnail}
+                                                onChange={e => setEmbedThumbnail(e.target.checked)}
+                                            />
+                                        </label>
+
+                                        <div className="card-actions flex-col sm:flex-row justify-center gap-3 mt-6 w-full">
+                                            <button className="btn btn-neutral flex-1 py-3 h-auto" onClick={() => handleDownload('video')}>
+                                                <div className="flex flex-col items-center">
+                                                    <span className="font-bold">MP4</span>
+                                                    <span className="text-[0.65rem] opacity-60">High Quality Video</span>
+                                                </div>
+                                            </button>
+                                            <button className="btn btn-secondary shadow-lg shadow-secondary/20 flex-1 py-3 h-auto" onClick={() => handleDownload('audio')}>
+                                                <div className="flex flex-col items-center">
+                                                    <span className="font-bold">MP3</span>
+                                                    <span className="text-[0.65rem] opacity-80">Standard Audio</span>
+                                                </div>
+                                            </button>
+                                            <button className="btn btn-primary shadow-lg shadow-primary/20 flex-1 py-3 h-auto" onClick={() => handleDownload('opus')}>
+                                                <div className="flex flex-col items-center">
+                                                    <span className="font-bold text-white">Opus</span>
+                                                    <span className="text-[0.65rem] text-white/80">Highest Quality Audio</span>
+                                                </div>
+                                            </button>
+                                        </div>
+
+                                        <button className="btn btn-ghost mt-8 text-base-content/50 hover:text-white" onClick={() => setVideoInfo(null)}>
+                                            ← Back to Search Results
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
             </div>
         </div>
     );
