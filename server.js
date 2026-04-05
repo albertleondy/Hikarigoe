@@ -219,15 +219,54 @@ app.post('/api/ytdl/info', async (req, res) => {
 
     console.log(`\n📺 Fetching YouTube Info: ${url}`);
     try {
-        const stdout = await ytDlpWrap.execPromise([url, '--dump-json', ...getCookieArgs()]);
-        const metadata = JSON.parse(stdout);
-        res.json({
-            id: metadata.id,
-            title: metadata.title,
-            thumbnail: metadata.thumbnail,
-            duration: metadata.duration,
-            channel: metadata.uploader
-        });
+        const stdout = await ytDlpWrap.execPromise([url, '--dump-json', '--flat-playlist', ...getCookieArgs()]);
+        const lines = stdout.trim().split('\n').filter(line => line.trim().length > 0);
+        
+        if (lines.length > 1) {
+            // It's a playlist!
+            const results = lines.map(line => {
+                try {
+                    const meta = JSON.parse(line);
+                    return {
+                        id: meta.id,
+                        title: meta.title,
+                        url: `https://www.youtube.com/watch?v=${meta.id}`,
+                        thumbnail: meta.thumbnails?.[0]?.url || meta.thumbnail || "",
+                        duration: meta.duration,
+                        channel: meta.uploader || meta.channel || meta.uploader_id
+                    };
+                } catch (e) {
+                    return null;
+                }
+            }).filter(item => item !== null && item.id);
+            res.json({ isPlaylist: true, videos: results });
+        } else if (lines.length === 1) {
+            const metadata = JSON.parse(lines[0]);
+            
+            if (metadata._type === 'playlist' && metadata.entries) {
+                 const results = metadata.entries.map(meta => ({
+                    id: meta.id,
+                    title: meta.title,
+                    url: `https://www.youtube.com/watch?v=${meta.id}`,
+                    thumbnail: meta.thumbnails?.[0]?.url || meta.thumbnail || "",
+                    duration: meta.duration,
+                    channel: meta.uploader || meta.channel || meta.uploader_id
+                 })).filter(item => item.id);
+                 res.json({ isPlaylist: true, videos: results });
+                 return;
+            }
+
+            res.json({
+                isPlaylist: false,
+                id: metadata.id,
+                title: metadata.title,
+                thumbnail: metadata.thumbnail,
+                duration: metadata.duration,
+                channel: metadata.uploader
+            });
+        } else {
+             res.status(404).json({ error: 'No data returned' });
+        }
     } catch (error) {
         console.error("yt-dlp info error:", error);
         res.status(500).json({ error: 'Failed to fetch video info. ' + error.message });
