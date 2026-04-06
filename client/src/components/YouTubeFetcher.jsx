@@ -16,6 +16,10 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
     const [recommendations, setRecommendations] = useState([]);
     const [loadingRecs, setLoadingRecs] = useState(false);
 
+    const [playlistSelectedVideo, setPlaylistSelectedVideo] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 8;
+
     const fetchStatus = () => {
         fetch('http://localhost:3001/api/ytdl/status')
             .then(res => res.json())
@@ -71,12 +75,14 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
     };
 
     const handleInspect = async (e) => {
-        e.preventDefault();
+        if (e && e.preventDefault) e.preventDefault();
         if (!url) return;
         setLoading(true);
         setError(null);
         setVideoInfo(null);
         setRecommendations([]);
+        setPlaylistSelectedVideo(null);
+        setCurrentPage(1);
         try {
             const res = await fetch('http://localhost:3001/api/ytdl/info', {
                 method: 'POST',
@@ -114,14 +120,13 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
         }
     };
 
-    const handleDownload = (type) => {
-        if (!url) return;
-        let downloadUrl = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(url)}&type=${type}&embedThumbnail=${embedThumbnail}`;
+    const handleDownload = (type, currentVideoUrl = url, currentVideoInfo = videoInfo) => {
+        if (!currentVideoUrl) return;
+        let downloadUrl = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(currentVideoUrl)}&type=${type}&embedThumbnail=${embedThumbnail}`;
 
-        // Only add trim parameters if user has actually trimmed the video and values are valid
         const hasValidTrim = trimRange.endTime > 0 &&
             trimRange.startTime < trimRange.endTime &&
-            (trimRange.startTime > 0 || trimRange.endTime < (videoInfo?.duration || Infinity));
+            (trimRange.startTime > 0 || trimRange.endTime < (currentVideoInfo?.duration || Infinity));
 
         if (hasValidTrim) {
             downloadUrl += `&startTime=${trimRange.startTime}&endTime=${trimRange.endTime}`;
@@ -131,8 +136,27 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
         window.location.href = downloadUrl;
     };
 
+    const handleVideoClick = (video) => {
+        setPlaylistSelectedVideo({
+            id: video.id,
+            title: video.title,
+            thumbnail: video.thumbnail,
+            duration: video.duration,
+            channel: video.channel,
+            url: video.url || `https://www.youtube.com/watch?v=${video.id}`
+        });
+    };
+
+    const isShowingPlaylist = videoInfo && videoInfo.isPlaylist && !playlistSelectedVideo;
+    const isShowingVideo = (videoInfo && !videoInfo.isPlaylist) || playlistSelectedVideo;
+    const activeVideo = playlistSelectedVideo || videoInfo;
+    const activeVideoUrl = playlistSelectedVideo ? playlistSelectedVideo.url : url;
+
+    const totalPages = videoInfo && videoInfo.isPlaylist ? Math.ceil(videoInfo.videos.length / ITEMS_PER_PAGE) : 0;
+    const currentResults = videoInfo && videoInfo.isPlaylist ? videoInfo.videos.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE) : [];
+
     return (
-        <div className="flex flex-col h-full flex-1 min-h-0 animate-fade-in gap-4 w-full max-w-3xl mx-auto overflow-y-auto custom-scrollbar pr-2 pb-6 pt-2">
+        <div className="flex flex-col h-full flex-1 min-h-0 animate-fade-in gap-4">
             <div className="text-center shrink-0">
                 <button
                     className={`badge badge-lg gap-2 cursor-pointer hover:scale-105 transition-transform ${cookieStatus || browserCookie ? 'badge-success badge-outline' : 'badge-neutral'}`}
@@ -143,7 +167,7 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
             </div>
 
             {showSettings && (
-                <div className="w-full p-6 bg-base-300/50 backdrop-blur-md border border-white/5 rounded-2xl flex flex-col gap-4 shadow-xl shrink-0">
+                <div className="max-w-2xl mx-auto w-full p-6 bg-base-300/50 backdrop-blur-md border border-white/5 rounded-2xl flex flex-col gap-4 shadow-xl shrink-0">
                     <h4 className="text-xl font-bold text-white m-0">Cookie Settings</h4>
                     <p className="text-sm text-base-content/70 m-0">
                         Providing cookies allows downloading age-restricted or premium content in the highest quality.
@@ -151,7 +175,7 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
                     <div className="flex flex-wrap gap-6 items-end">
                         <div className="flex-1 min-w-[200px] flex flex-col gap-2">
                             <label className="text-sm font-semibold text-white">Upload cookies.txt</label>
-                            <input type="file" className="file-input file-input-bordered file-input-primary w-full" accept=".txt" onChange={handleFileUpload} disabled={uploading} />
+                            <input type="file" className="file-input file-input-bordered file-input-primary w-full max-w-xs" accept=".txt" onChange={handleFileUpload} disabled={uploading} />
                         </div>
                         <div className="flex-1 min-w-[200px] flex flex-col gap-2">
                             <label className="text-sm font-semibold text-white">Or Use Browser Cookies</label>
@@ -171,7 +195,7 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
                 </div>
             )}
 
-            <form onSubmit={handleInspect} className="w-full flex gap-2 shrink-0">
+            <form onSubmit={handleInspect} className="max-w-2xl mx-auto w-full flex gap-2 shrink-0 px-2">
                 <input
                     type="text"
                     className="input input-bordered input-primary flex-1 shadow-sm text-lg py-2 h-auto"
@@ -185,18 +209,68 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
             </form>
 
             {error && (
-                <div className="alert alert-error shadow-lg shrink-0">
+                <div className="alert alert-error max-w-2xl mx-auto shadow-lg shrink-0">
                     <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     <span>{error}</span>
                 </div>
             )}
 
-            {videoInfo && (() => {
-                const videoId = url.match(/[?&]v=([^&]+)/)?.[1] || url.match(/youtu\.be\/([^?]+)/)?.[1];
-                return (
-                    <>
-                        <div className="flex flex-col gap-6 w-full mt-4 h-full min-h-0 shrink-0">
-                            <div className="flex flex-col lg:flex-row gap-6 w-full h-full min-h-0 shrink-0">
+            <div className={`flex-1 overflow-hidden flex min-h-0 bg-base-200/30 rounded-3xl border border-white/5 shadow-inner ${videoInfo ? 'p-4' : 'p-0 border-none bg-transparent'}`}>
+                {isShowingPlaylist && (
+                    <div className="flex flex-col h-full flex-1 overflow-hidden">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto custom-scrollbar pr-2 pb-4 pt-2">
+                            {currentResults.map(video => {
+                                const inQueue = queuedVideos && queuedVideos.find(v => v.id === video.id);
+                                return (
+                                    <div key={video.id} className="card bg-base-300 shadow-xl cursor-pointer hover:-translate-y-1 hover:shadow-primary/20 hover:border-primary/50 border border-transparent transition-all duration-300 overflow-hidden group" onClick={() => handleVideoClick(video)}>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); if (addToQueue) addToQueue({ ...video, url: video.url || `https://www.youtube.com/watch?v=${video.id}` }); }}
+                                            className={`absolute top-2 right-2 btn btn-circle btn-sm z-10 ${inQueue ? 'btn-success text-white pointer-events-none' : 'btn-neutral opacity-0 group-hover:opacity-100'}`}
+                                            title={inQueue ? "In Queue" : "Add to Download Queue"}
+                                        >
+                                            {inQueue ? '✓' : '+'}
+                                        </button>
+                                        <figure className="aspect-video relative">
+                                            <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover" />
+                                            {video.duration ? <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs text-white font-mono">{new Date(video.duration * 1000).toISOString().substr(14, 5)}</div> : null}
+                                        </figure>
+                                        <div className="px-3 py-2 flex flex-col justify-center">
+                                            <MarqueeTitle text={video.title} className="font-bold text-sm text-white w-full" />
+                                            <p className="text-xs text-base-content/60 truncate mt-0.5 w-full">{video.channel}</p>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                        {totalPages > 1 && (
+                            <div className="flex justify-center items-center gap-4 mt-4 pt-2 pb-2 shrink-0 border-t border-white/5">
+                                <button
+                                    className="btn btn-sm btn-outline btn-primary"
+                                    disabled={currentPage === 1}
+                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                >
+                                    Previous
+                                </button>
+                                <span className="text-sm font-medium text-base-content/70">Page {currentPage} of {totalPages}</span>
+                                <button
+                                    className="btn btn-sm btn-outline btn-primary"
+                                    disabled={currentPage === totalPages}
+                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {isShowingVideo && (() => {
+                    const videoId = activeVideoUrl.match(/[?&]v=([^&]+)/)?.[1] || activeVideoUrl.match(/youtu\.be\/([^?]+)/)?.[1] || activeVideo.id;
+                    const handleVideoDownload = (type) => handleDownload(type, activeVideoUrl, activeVideo);
+
+                    return (
+                        <div className="flex flex-col gap-6 w-full h-full min-h-0 overflow-y-auto custom-scrollbar pr-2 mt-4">
+                            <div className="flex flex-col lg:flex-row gap-6 w-full shrink-0">
                                 {/* LEFT: MEDIA SIDE */}
                                 <div className="w-full lg:w-1/2 flex flex-col gap-4 shrink-0">
                                     <div className="card bg-black shadow-2xl border border-white/10 overflow-hidden w-full aspect-video rounded-2xl relative">
@@ -212,25 +286,25 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
                                             ></iframe>
                                         ) : (
                                             <figure className="h-full w-full">
-                                                <img src={videoInfo.thumbnail} alt={videoInfo.title} className="w-full h-full object-contain" />
+                                                <img src={activeVideo.thumbnail} alt={activeVideo.title} className="w-full h-full object-contain" />
                                             </figure>
                                         )}
                                     </div>
                                     <div className="flex flex-col gap-3 bg-base-300/50 p-5 rounded-xl border border-white/5">
                                         <div className="flex justify-between items-center">
                                             <span className="text-base-content/60 font-semibold">Watch on YouTube</span>
-                                            <a href={url} target="_blank" rel="noreferrer" className="btn btn-sm btn-info shadow-md shadow-info/20">
+                                            <a href={activeVideoUrl} target="_blank" rel="noreferrer" className="btn btn-sm btn-info shadow-md shadow-info/20">
                                                 Open Link ↗
                                             </a>
                                         </div>
                                         {addToQueue && queuedVideos && (() => {
                                             const fullVideo = {
-                                                id: videoId || videoInfo.id,
-                                                title: videoInfo.title,
-                                                url: url,
-                                                thumbnail: videoInfo.thumbnail,
-                                                duration: videoInfo.duration,
-                                                channel: videoInfo.channel
+                                                id: videoId || activeVideo.id,
+                                                title: activeVideo.title,
+                                                url: activeVideoUrl,
+                                                thumbnail: activeVideo.thumbnail,
+                                                duration: activeVideo.duration,
+                                                channel: activeVideo.channel
                                             };
                                             const inQueue = queuedVideos.find(v => v.id === fullVideo.id);
                                             return (
@@ -249,13 +323,13 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
                                 {/* RIGHT: METADATA & ACTIONS */}
                                 <div className="w-full lg:w-1/2 flex flex-col h-fit">
                                     <div className="card w-full bg-base-300 shadow-2xl overflow-hidden border border-white/5">
-                                        <div className="card-body px-6 md:px-8 py-8 items-center text-center">
-                                            <h2 className="card-title text-3xl font-bold text-white leading-tight mb-0">{videoInfo.title}</h2>
-                                            <p className="text-base-content/70 font-medium text-lg m-0 mt-1">{videoInfo.channel}</p>
+                                        <div className="card-body px-6 md:px-8 py-8">
+                                            <h2 className="card-title text-2xl text-white mb-0 leading-tight">{activeVideo.title}</h2>
+                                            <p className="text-base-content/70 font-bold m-0 mt-1 text-lg">{activeVideo.channel}</p>
 
-                                            {videoInfo.duration && (
-                                                <div className="badge badge-primary badge-outline mt-2 px-3 py-3 font-mono font-bold">
-                                                    Length: {new Date(videoInfo.duration * 1000).toISOString().substr(11, 8).replace(/^00:/, '')}
+                                            {activeVideo.duration && (
+                                                <div className="badge badge-primary badge-outline mt-3 px-3 py-3 font-mono font-bold text-sm">
+                                                    Length: {new Date(activeVideo.duration * 1000).toISOString().substr(11, 8).replace(/^00:/, '')}
                                                 </div>
                                             )}
 
@@ -265,39 +339,45 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
                                                 <span className="label-text text-base font-semibold">Embed Thumbnail (Audio)</span>
                                                 <input
                                                     type="checkbox"
-                                                    className="toggle toggle-primary toggle-lg"
+                                                    className="toggle toggle-primary toggle-md"
                                                     checked={embedThumbnail}
                                                     onChange={e => setEmbedThumbnail(e.target.checked)}
                                                 />
                                             </label>
 
-                                            {videoInfo.duration && (
+                                            {activeVideo.duration && (
                                                 <VideoTrimmer
-                                                    duration={videoInfo.duration}
+                                                    duration={activeVideo.duration}
                                                     onTrimChange={setTrimRange}
                                                 />
                                             )}
 
-                                            <div className="card-actions flex-col sm:flex-row justify-center gap-4 mt-6 w-full">
-                                                <button className="btn btn-neutral flex-1 py-4 h-auto shadow-md hover:shadow-lg" onClick={() => handleDownload('video')}>
+                                            <div className="card-actions flex-col sm:flex-row justify-center gap-3 mt-6 w-full">
+                                                <button className="btn btn-neutral flex-1 py-3 h-auto" onClick={() => handleVideoDownload('video')}>
                                                     <div className="flex flex-col items-center">
-                                                        <span className="font-bold text-lg">MP4</span>
-                                                        <span className="text-xs opacity-60">High Quality Video</span>
+                                                        <span className="font-bold">MP4</span>
+                                                        <span className="text-[0.65rem] opacity-60">High Quality Video</span>
                                                     </div>
                                                 </button>
-                                                <button className="btn btn-secondary flex-1 py-4 h-auto shadow-lg shadow-secondary/20 hover:shadow-secondary/40" onClick={() => handleDownload('audio')}>
+                                                <button className="btn btn-secondary shadow-lg shadow-secondary/20 flex-1 py-3 h-auto" onClick={() => handleVideoDownload('audio')}>
                                                     <div className="flex flex-col items-center">
-                                                        <span className="font-bold text-lg">MP3</span>
-                                                        <span className="text-xs opacity-80">Standard Audio</span>
+                                                        <span className="font-bold">MP3</span>
+                                                        <span className="text-[0.65rem] opacity-80">Standard Audio</span>
                                                     </div>
                                                 </button>
-                                                <button className="btn btn-primary flex-1 py-4 h-auto shadow-lg shadow-primary/20 hover:shadow-primary/40" onClick={() => handleDownload('opus')}>
+                                                <button className="btn btn-primary shadow-lg shadow-primary/20 flex-1 py-3 h-auto" onClick={() => handleVideoDownload('opus')}>
                                                     <div className="flex flex-col items-center">
-                                                        <span className="font-bold text-lg text-white">Opus</span>
-                                                        <span className="text-xs text-white/80">Highest Quality Audio</span>
+                                                        <span className="font-bold text-white">Opus</span>
+                                                        <span className="text-[0.65rem] text-white/80">Highest Quality Audio</span>
                                                     </div>
                                                 </button>
                                             </div>
+
+                                            {videoInfo && videoInfo.isPlaylist && playlistSelectedVideo && (
+                                                <button className="btn btn-ghost mt-8 text-base-content/50 hover:text-white" onClick={() => setPlaylistSelectedVideo(null)}>
+                                                    ← Back to Playlist
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -350,9 +430,9 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
                                 </div>
                             )}
                         </div>
-                    </>
-                );
-            })()}
+                    );
+                })()}
+            </div>
         </div>
     );
 };
