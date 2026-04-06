@@ -5,6 +5,7 @@ const Kuroshiro = require("kuroshiro").default;
 const KuromojiAnalyzer = require("kuroshiro-analyzer-kuromoji");
 const nodePath = require('path');
 const fs = require('fs');
+const cheerio = require('cheerio');
 
 const app = express();
 const PORT = 3001;
@@ -26,6 +27,105 @@ function getCookieArgs() {
         return ['--cookies', cookiesPath];
     }
     return [];
+}
+
+// Genius helper functions
+async function searchGenius(query) {
+    try {
+        const response = await fetch(`https://genius.com/api/search/multi?q=${encodeURIComponent(query)}`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Genius search failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const songs = data.response.sections.find(section => section.type === 'song')?.hits || [];
+
+        return songs.map(hit => ({
+            id: hit.result.id.toString(),
+            url: hit.result.url,
+            title: hit.result.title,
+            artist: hit.result.primary_artist.name,
+            album: hit.result.album?.name || 'Unknown',
+            thumbnail: hit.result.song_art_image_thumbnail_url,
+            duration: null // Genius doesn't provide duration
+        }));
+    } catch (error) {
+        console.error("⚠️ Genius Search Error:", error.message);
+        return [];
+    }
+}
+
+async function getGeniusLyrics(url) {
+    try {
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Genius page fetch failed: ${response.status}`);
+        }
+
+        const html = await response.text();
+        const $ = cheerio.load(html);
+
+        // Extract song title and artist
+        const title = $('h1').first().text().trim() || '';
+        const artist = $('.header_with_cover_art-primary_info-primary_artist').first().text().trim() || '';
+
+        // Genius stores lyrics in a div with data-lyrics-container attribute
+        const lyricsContainer = $('[data-lyrics-container="true"]');
+
+        if (lyricsContainer.length === 0) {
+            return { lyrics: null, title, artist };
+        }
+
+        // Get the text content and clean it up
+        let lyrics = lyricsContainer.first().text();
+
+        // Find where the actual lyrics start by looking for common patterns
+        const lyricsPatterns = [
+            /\[Verse 1\]/i,
+            /\[Verse\]/i,
+            /\[Chorus\]/i,
+            /\[Intro\]/i,
+            /Lyrics\s+/i,
+            /Read More\s+/i
+        ];
+
+        let lyricsStart = -1;
+        for (const pattern of lyricsPatterns) {
+            const match = lyrics.match(pattern);
+            if (match && (lyricsStart === -1 || match.index < lyricsStart)) {
+                lyricsStart = match.index + match[0].length; // Start after the pattern
+            }
+        }
+
+        // If we found a pattern, extract from that point
+        if (lyricsStart !== -1) {
+            lyrics = lyrics.substring(lyricsStart);
+        }
+
+        // Clean up the lyrics - be more careful with regex patterns
+        lyrics = lyrics.replace(/\d+\s+Contributors[\s\S]*?Lyrics/i, ''); // Remove contributor info up to "Lyrics"
+        lyrics = lyrics.replace(/Translations[\s\S]*?Lyrics/i, ''); // Remove translation info up to "Lyrics"
+        lyrics = lyrics.replace(/Read More[\s\S]*?Lyrics/i, ''); // Remove "Read More" up to "Lyrics"
+        lyrics = lyrics.replace(/^[\s\S]*?Lyrics/i, ''); // Remove everything up to and including "Lyrics"
+
+        // Clean up extra whitespace but preserve line structure
+        lyrics = lyrics.trim();
+
+        return { lyrics, title, artist };
+    } catch (error) {
+        console.error("Genius lyrics fetch error:", error.message);
+        return { lyrics: null, title: '', artist: '' };
+    }
 }
 
 const search = NeteaseApi.search;
@@ -91,11 +191,28 @@ app.get('/api/search', async (req, res) => {
         console.error("⚠️ Lrclib Search Error:", error.message);
     }
 
+    // 3. Search Genius
+    try {
+        const geniusSongs = await searchGenius(query);
+        const formattedGeniusSongs = geniusSongs.slice(0, 10).map(song => ({
+            id: song.id,
+            source: 'Genius',
+            name: song.title,
+            artist: song.artist,
+            album: song.album,
+            duration: song.duration,
+            url: song.url // Store URL for lyrics fetching
+        }));
+        results = [...results, ...formattedGeniusSongs];
+    } catch (error) {
+        console.error("⚠️ Genius Search Error:", error.message);
+    }
+
     res.json(results);
 });
 
 app.get('/api/lyrics', async (req, res) => {
-    const { id, source } = req.query;
+    const { id, source, url } = req.query;
 
     if (!id || !source) {
         return res.status(400).json({ error: 'Parameters "id" and "source" are required' });
@@ -127,6 +244,19 @@ app.get('/api/lyrics', async (req, res) => {
                 }
             } catch (e) {
                 console.error("Lrclib fetch error", e);
+            }
+        } else if (source === 'Genius') {
+            try {
+                if (url) {
+                    const geniusResult = await getGeniusLyrics(url);
+                    rawLyrics = geniusResult.lyrics;
+                    songName = geniusResult.title;
+                    artistName = geniusResult.artist;
+                } else {
+                    console.error("Genius URL not provided");
+                }
+            } catch (e) {
+                console.error("Genius fetch error", e);
             }
         }
 
@@ -263,6 +393,88 @@ app.get('/api/ytdl/search', async (req, res) => {
     } catch (error) {
         console.error("yt-dlp search error:", error);
         res.status(500).json({ error: 'Failed to search YouTube. ' + error.message });
+    }
+});
+
+app.get('/api/ytdl/related', async (req, res) => {
+    const { url, channel, id } = req.query;
+    if (!url && !channel && !id) return res.status(400).json({ error: 'URL, channel or id parameter is required' });
+
+    try {
+        let videoId = id;
+        if (!videoId && url) {
+            videoId = url.match(/[?&]v=([^&]+)/)?.[1] || url.match(/youtu\.be\/([^?]+)/)?.[1];
+        }
+
+        if (videoId) {
+            console.log(`\n🎬 Fetching similar videos for: ${videoId}`);
+            // Fetch similar videos using YouTube's Mix playlist (list=RD<video_id>)
+            let args = [`https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}`, '--dump-json', '--flat-playlist', '--playlist-end', '15', ...getCookieArgs()];
+            try {
+                const stdout = await ytDlpWrap.execPromise(args);
+                const results = stdout.trim().split('\n').filter(Boolean).map(line => {
+                    try {
+                        const meta = JSON.parse(line);
+                        return {
+                            id: meta.id,
+                            title: meta.title,
+                            url: `https://www.youtube.com/watch?v=${meta.id}`,
+                            thumbnail: meta.thumbnails?.[0]?.url || meta.thumbnail || "",
+                            duration: meta.duration,
+                            channel: meta.uploader || meta.channel
+                        };
+                    } catch (e) {
+                        return null;
+                    }
+                }).filter(item => item !== null);
+
+                // Check if we actually got results back
+                if (results.length > 0) {
+                    return res.json(results);
+                }
+            } catch (e) {
+                console.log("Mix playlist fetch failed:", e.message, "Falling back to channel search...");
+            }
+        }
+
+        // Fallback to channel
+        let searchQuery = channel;
+        if (!searchQuery && url) {
+            const metaArgs = [url, '--dump-json', ...getCookieArgs()];
+            try {
+                const metaStdout = await ytDlpWrap.execPromise(metaArgs);
+                const meta = JSON.parse(metaStdout);
+                searchQuery = meta.uploader || meta.channel;
+            } catch (e) { }
+        }
+
+        if (!searchQuery) {
+            return res.status(404).json({ error: 'Could not determine channel for fallback' });
+        }
+
+        console.log(`\n🎬 Fetching fallback recommendations for channel: ${searchQuery}`);
+        let args = [`ytsearch15:${searchQuery}`, '--dump-json', '--flat-playlist', ...getCookieArgs()];
+        const stdout = await ytDlpWrap.execPromise(args);
+        const results = stdout.trim().split('\n').filter(Boolean).map(line => {
+            try {
+                const meta = JSON.parse(line);
+                return {
+                    id: meta.id,
+                    title: meta.title,
+                    url: `https://www.youtube.com/watch?v=${meta.id}`,
+                    thumbnail: meta.thumbnails?.[0]?.url || meta.thumbnail || "",
+                    duration: meta.duration,
+                    channel: meta.uploader || meta.channel
+                };
+            } catch (e) {
+                return null;
+            }
+        }).filter(item => item !== null);
+
+        res.json(results);
+    } catch (error) {
+        console.error("yt-dlp related error:", error);
+        res.status(500).json({ error: 'Failed to fetch related videos. ' + error.message });
     }
 });
 

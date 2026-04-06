@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import VideoTrimmer from './VideoTrimmer';
+import MarqueeTitle from './MarqueeTitle';
 
 const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
     const [url, setUrl] = useState('');
@@ -12,6 +13,8 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
     const [uploading, setUploading] = useState(false);
     const [embedThumbnail, setEmbedThumbnail] = useState(false);
     const [trimRange, setTrimRange] = useState({ startTime: 0, endTime: 0 });
+    const [recommendations, setRecommendations] = useState([]);
+    const [loadingRecs, setLoadingRecs] = useState(false);
 
     const fetchStatus = () => {
         fetch('http://localhost:3001/api/ytdl/status')
@@ -73,6 +76,7 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
         setLoading(true);
         setError(null);
         setVideoInfo(null);
+        setRecommendations([]);
         try {
             const res = await fetch('http://localhost:3001/api/ytdl/info', {
                 method: 'POST',
@@ -82,10 +86,31 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to fetch info. Ensure URL is valid.');
             setVideoInfo(data);
+
+            // Fetch recommendations
+            fetchRecommendations(data);
         } catch (err) {
             setError(err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchRecommendations = async (video) => {
+        if (!video) return;
+        setLoadingRecs(true);
+        try {
+            const res = await fetch(`http://localhost:3001/api/ytdl/related?id=${encodeURIComponent(video.id)}&channel=${encodeURIComponent(video.channel)}`);
+            const data = await res.json();
+            if (res.ok) {
+                // Filter out the current video from recommendations
+                const filtered = data.filter(v => v.id !== video.id);
+                setRecommendations(filtered.slice(0, 12));
+            }
+        } catch (err) {
+            console.error('Failed to fetch recommendations:', err);
+        } finally {
+            setLoadingRecs(false);
         }
     };
 
@@ -95,8 +120,8 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
 
         // Only add trim parameters if user has actually trimmed the video and values are valid
         const hasValidTrim = trimRange.endTime > 0 &&
-                            trimRange.startTime < trimRange.endTime &&
-                            (trimRange.startTime > 0 || trimRange.endTime < (videoInfo?.duration || Infinity));
+            trimRange.startTime < trimRange.endTime &&
+            (trimRange.startTime > 0 || trimRange.endTime < (videoInfo?.duration || Infinity));
 
         if (hasValidTrim) {
             downloadUrl += `&startTime=${trimRange.startTime}&endTime=${trimRange.endTime}`;
@@ -169,112 +194,163 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
             {videoInfo && (() => {
                 const videoId = url.match(/[?&]v=([^&]+)/)?.[1] || url.match(/youtu\.be\/([^?]+)/)?.[1];
                 return (
-                    <div className="flex flex-col lg:flex-row gap-6 w-full mt-4 h-full min-h-0 shrink-0">
-                        {/* LEFT: MEDIA SIDE */}
-                        <div className="w-full lg:w-1/2 flex flex-col gap-4 shrink-0">
-                            <div className="card bg-black shadow-2xl border border-white/10 overflow-hidden w-full aspect-video rounded-2xl relative">
-                                {videoId ? (
-                                    <iframe
-                                        width="100%" height="100%"
-                                        src={`https://www.youtube.com/embed/${videoId}?autoplay=0`}
-                                        title="YouTube video player"
-                                        frameBorder="0"
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                        allowFullScreen
-                                        className="absolute inset-0"
-                                    ></iframe>
-                                ) : (
-                                    <figure className="h-full w-full">
-                                        <img src={videoInfo.thumbnail} alt={videoInfo.title} className="w-full h-full object-contain" />
-                                    </figure>
-                                )}
-                            </div>
-                            <div className="flex flex-col gap-3 bg-base-300/50 p-5 rounded-xl border border-white/5">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-base-content/60 font-semibold">Watch on YouTube</span>
-                                    <a href={url} target="_blank" rel="noreferrer" className="btn btn-sm btn-info shadow-md shadow-info/20">
-                                        Open Link ↗
-                                    </a>
-                                </div>
-                                {addToQueue && queuedVideos && (() => {
-                                    const fullVideo = {
-                                        id: videoId || videoInfo.id,
-                                        title: videoInfo.title,
-                                        url: url,
-                                        thumbnail: videoInfo.thumbnail,
-                                        duration: videoInfo.duration,
-                                        channel: videoInfo.channel
-                                    };
-                                    const inQueue = queuedVideos.find(v => v.id === fullVideo.id);
-                                    return (
-                                        <button
-                                            className={`btn w-full shadow-md ${inQueue ? 'btn-success text-white pointer-events-none' : 'btn-outline btn-primary'}`}
-                                            onClick={() => addToQueue(fullVideo)}
-                                            disabled={!fullVideo.id}
-                                        >
-                                            {inQueue ? '✓ Added to Queue' : '+ Add to Download Queue'}
-                                        </button>
-                                    );
-                                })()}
-                            </div>
-                        </div>
-
-                        {/* RIGHT: METADATA & ACTIONS */}
-                        <div className="w-full lg:w-1/2 flex flex-col h-fit">
-                            <div className="card w-full bg-base-300 shadow-2xl overflow-hidden border border-white/5">
-                                <div className="card-body px-6 md:px-8 py-8 items-center text-center">
-                                    <h2 className="card-title text-3xl font-bold text-white leading-tight mb-0">{videoInfo.title}</h2>
-                                    <p className="text-base-content/70 font-medium text-lg m-0 mt-1">{videoInfo.channel}</p>
-
-                                    {videoInfo.duration && (
-                                        <div className="badge badge-primary badge-outline mt-2 px-3 py-3 font-mono font-bold">
-                                            Length: {new Date(videoInfo.duration * 1000).toISOString().substr(11, 8).replace(/^00:/, '')}
+                    <>
+                        <div className="flex flex-col gap-6 w-full mt-4 h-full min-h-0 shrink-0">
+                            <div className="flex flex-col lg:flex-row gap-6 w-full h-full min-h-0 shrink-0">
+                                {/* LEFT: MEDIA SIDE */}
+                                <div className="w-full lg:w-1/2 flex flex-col gap-4 shrink-0">
+                                    <div className="card bg-black shadow-2xl border border-white/10 overflow-hidden w-full aspect-video rounded-2xl relative">
+                                        {videoId ? (
+                                            <iframe
+                                                width="100%" height="100%"
+                                                src={`https://www.youtube.com/embed/${videoId}?autoplay=0`}
+                                                title="YouTube video player"
+                                                frameBorder="0"
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                allowFullScreen
+                                                className="absolute inset-0"
+                                            ></iframe>
+                                        ) : (
+                                            <figure className="h-full w-full">
+                                                <img src={videoInfo.thumbnail} alt={videoInfo.title} className="w-full h-full object-contain" />
+                                            </figure>
+                                        )}
+                                    </div>
+                                    <div className="flex flex-col gap-3 bg-base-300/50 p-5 rounded-xl border border-white/5">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-base-content/60 font-semibold">Watch on YouTube</span>
+                                            <a href={url} target="_blank" rel="noreferrer" className="btn btn-sm btn-info shadow-md shadow-info/20">
+                                                Open Link ↗
+                                            </a>
                                         </div>
-                                    )}
+                                        {addToQueue && queuedVideos && (() => {
+                                            const fullVideo = {
+                                                id: videoId || videoInfo.id,
+                                                title: videoInfo.title,
+                                                url: url,
+                                                thumbnail: videoInfo.thumbnail,
+                                                duration: videoInfo.duration,
+                                                channel: videoInfo.channel
+                                            };
+                                            const inQueue = queuedVideos.find(v => v.id === fullVideo.id);
+                                            return (
+                                                <button
+                                                    className={`btn w-full shadow-md ${inQueue ? 'btn-success text-white pointer-events-none' : 'btn-outline btn-primary'}`}
+                                                    onClick={() => addToQueue(fullVideo)}
+                                                    disabled={!fullVideo.id}
+                                                >
+                                                    {inQueue ? '✓ Added to Queue' : '+ Add to Download Queue'}
+                                                </button>
+                                            );
+                                        })()}
+                                    </div>
+                                </div>
 
-                                    <div className="divider opacity-30 my-6">Download Options</div>
+                                {/* RIGHT: METADATA & ACTIONS */}
+                                <div className="w-full lg:w-1/2 flex flex-col h-fit">
+                                    <div className="card w-full bg-base-300 shadow-2xl overflow-hidden border border-white/5">
+                                        <div className="card-body px-6 md:px-8 py-8 items-center text-center">
+                                            <h2 className="card-title text-3xl font-bold text-white leading-tight mb-0">{videoInfo.title}</h2>
+                                            <p className="text-base-content/70 font-medium text-lg m-0 mt-1">{videoInfo.channel}</p>
 
-                                    <label className="label cursor-pointer justify-center gap-3 hover:bg-white/5 p-3 rounded-xl transition-colors w-full border border-base-100 bg-base-100/30">
-                                        <span className="label-text text-base font-semibold">Embed Thumbnail (Audio)</span>
-                                        <input
-                                            type="checkbox"
-                                            className="toggle toggle-primary toggle-lg"
-                                            checked={embedThumbnail}
-                                            onChange={e => setEmbedThumbnail(e.target.checked)}
-                                        />
-                                    </label>
+                                            {videoInfo.duration && (
+                                                <div className="badge badge-primary badge-outline mt-2 px-3 py-3 font-mono font-bold">
+                                                    Length: {new Date(videoInfo.duration * 1000).toISOString().substr(11, 8).replace(/^00:/, '')}
+                                                </div>
+                                            )}
 
-                                    {videoInfo.duration && (
-                                        <VideoTrimmer
-                                            duration={videoInfo.duration}
-                                            onTrimChange={setTrimRange}
-                                        />
-                                    )}
+                                            <div className="divider opacity-30 my-6">Download Options</div>
 
-                                    <div className="card-actions flex-col sm:flex-row justify-center gap-4 mt-6 w-full">
-                                        <button className="btn btn-neutral flex-1 py-4 h-auto shadow-md hover:shadow-lg" onClick={() => handleDownload('video')}>
-                                            <div className="flex flex-col items-center">
-                                                <span className="font-bold text-lg">MP4</span>
-                                                <span className="text-xs opacity-60">High Quality Video</span>
+                                            <label className="label cursor-pointer justify-center gap-3 hover:bg-white/5 p-3 rounded-xl transition-colors w-full border border-base-100 bg-base-100/30">
+                                                <span className="label-text text-base font-semibold">Embed Thumbnail (Audio)</span>
+                                                <input
+                                                    type="checkbox"
+                                                    className="toggle toggle-primary toggle-lg"
+                                                    checked={embedThumbnail}
+                                                    onChange={e => setEmbedThumbnail(e.target.checked)}
+                                                />
+                                            </label>
+
+                                            {videoInfo.duration && (
+                                                <VideoTrimmer
+                                                    duration={videoInfo.duration}
+                                                    onTrimChange={setTrimRange}
+                                                />
+                                            )}
+
+                                            <div className="card-actions flex-col sm:flex-row justify-center gap-4 mt-6 w-full">
+                                                <button className="btn btn-neutral flex-1 py-4 h-auto shadow-md hover:shadow-lg" onClick={() => handleDownload('video')}>
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="font-bold text-lg">MP4</span>
+                                                        <span className="text-xs opacity-60">High Quality Video</span>
+                                                    </div>
+                                                </button>
+                                                <button className="btn btn-secondary flex-1 py-4 h-auto shadow-lg shadow-secondary/20 hover:shadow-secondary/40" onClick={() => handleDownload('audio')}>
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="font-bold text-lg">MP3</span>
+                                                        <span className="text-xs opacity-80">Standard Audio</span>
+                                                    </div>
+                                                </button>
+                                                <button className="btn btn-primary flex-1 py-4 h-auto shadow-lg shadow-primary/20 hover:shadow-primary/40" onClick={() => handleDownload('opus')}>
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="font-bold text-lg text-white">Opus</span>
+                                                        <span className="text-xs text-white/80">Highest Quality Audio</span>
+                                                    </div>
+                                                </button>
                                             </div>
-                                        </button>
-                                        <button className="btn btn-secondary flex-1 py-4 h-auto shadow-lg shadow-secondary/20 hover:shadow-secondary/40" onClick={() => handleDownload('audio')}>
-                                            <div className="flex flex-col items-center">
-                                                <span className="font-bold text-lg">MP3</span>
-                                                <span className="text-xs opacity-80">Standard Audio</span>
-                                            </div>
-                                        </button>
-                                        <button className="btn btn-primary flex-1 py-4 h-auto shadow-lg shadow-primary/20 hover:shadow-primary/40" onClick={() => handleDownload('opus')}>
-                                            <div className="flex flex-col items-center">
-                                                <span className="font-bold text-lg text-white">Opus</span>
-                                                <span className="text-xs text-white/80">Highest Quality Audio</span>
-                                            </div>
-                                        </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Recommendations Section - Improved Layout */}
+                            {recommendations.length > 0 && (
+                                <div className="w-full mt-2 pb-6">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <h3 className="text-xl font-bold text-white">Similar Videos</h3>
+                                        {loadingRecs && <span className="loading loading-spinner loading-sm"></span>}
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                        {recommendations.map(video => {
+                                            const inQueue = queuedVideos.find(v => v.id === video.id);
+                                            return (
+                                                <div key={video.id} className="card bg-base-300/60 shadow-md cursor-pointer hover:-translate-y-1 hover:shadow-primary/20 hover:border-primary/50 border border-transparent transition-all duration-300 overflow-hidden group" onClick={() => {
+                                                    setUrl(video.url);
+                                                    handleInspect({ preventDefault: () => { } });
+                                                }}>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            addToQueue({
+                                                                id: video.id,
+                                                                title: video.title,
+                                                                url: video.url,
+                                                                thumbnail: video.thumbnail,
+                                                                duration: video.duration,
+                                                                channel: video.channel
+                                                            });
+                                                        }}
+                                                        className={`absolute top-2 right-2 btn btn-circle btn-sm z-10 ${inQueue ? 'btn-success text-white pointer-events-none' : 'btn-neutral opacity-0 group-hover:opacity-100'}`}
+                                                        title={inQueue ? "In Queue" : "Add to Download Queue"}
+                                                    >
+                                                        {inQueue ? '✓' : '+'}
+                                                    </button>
+                                                    <figure className="aspect-video relative">
+                                                        <img src={video.thumbnail} alt={video.title} className="w-full object-cover" />
+                                                        {video.duration ? <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs text-white font-mono">{new Date(video.duration * 1000).toISOString().substr(14, 5)}</div> : null}
+                                                    </figure>
+                                                    <div className="px-3 py-2">
+                                                        <MarqueeTitle text={video.title} className="font-bold text-sm text-white" />
+                                                        <p className="text-xs text-base-content/60 truncate mt-0.5">{video.channel}</p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                    </div>
+                    </>
                 );
             })()}
         </div>

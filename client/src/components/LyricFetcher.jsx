@@ -37,7 +37,8 @@ const LyricFetcher = () => {
         setSelectedLyrics(null);
 
         try {
-            const response = await fetch(`http://localhost:3001/api/lyrics?id=${song.id}&source=${song.source}`);
+            const urlParam = song.source === 'Genius' && song.url ? `&url=${encodeURIComponent(song.url)}` : '';
+            const response = await fetch(`http://localhost:3001/api/lyrics?id=${song.id}&source=${song.source}${urlParam}`);
             if (!response.ok) {
                 throw new Error('Failed to fetch lyrics');
             }
