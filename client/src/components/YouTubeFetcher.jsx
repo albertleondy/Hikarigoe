@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import VideoTrimmer from './VideoTrimmer';
 import MarqueeTitle from './MarqueeTitle';
 import VideoView from './VideoView';
+import { Play } from 'lucide-react';
 
 const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
     const [url, setUrl] = useState('');
@@ -104,10 +105,11 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
     };
 
     const fetchRecommendations = async (video) => {
-        if (!video) return;
+        if (!video || !video.id) return;
         setLoadingRecs(true);
         try {
-            const res = await fetch(`http://localhost:3001/api/ytdl/related?id=${encodeURIComponent(video.id)}&channel=${encodeURIComponent(video.channel)}`);
+            const channel = video.channel || '';
+            const res = await fetch(`http://localhost:3001/api/ytdl/related?id=${encodeURIComponent(video.id)}&channel=${encodeURIComponent(channel)}`);
             const data = await res.json();
             if (res.ok) {
                 // Filter out the current video from recommendations
@@ -146,6 +148,9 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
             channel: video.channel,
             url: video.url || `https://www.youtube.com/watch?v=${video.id}`
         });
+
+        // Fetch recommendations for the selected video
+        fetchRecommendations(video);
     };
 
     const isShowingPlaylist = videoInfo && videoInfo.isPlaylist && !playlistSelectedVideo;
@@ -217,6 +222,15 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
             )}
 
             <div className={`flex-1 overflow-hidden flex min-h-0 bg-base-200/30 rounded-3xl border border-white/5 shadow-inner ${videoInfo ? 'p-4' : 'p-0 border-none bg-transparent'}`}>
+                {!videoInfo && (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+                        <div className="max-w-md">
+                            <Play className="w-16 h-16 mx-auto text-base-content/30 mb-4" />
+                            <h3 className="text-xl font-bold text-white mb-2">Ready to Download</h3>
+                            <p className="text-base-content/60">Paste a YouTube link or playlist URL above to get started</p>
+                        </div>
+                    </div>
+                )}
                 {isShowingPlaylist && (
                     <div className="flex flex-col h-full flex-1 overflow-hidden">
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto custom-scrollbar pr-2 pb-4 pt-2">

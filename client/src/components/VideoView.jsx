@@ -162,11 +162,11 @@ const VideoView = ({
                     <div className="flex items-center gap-2 mb-4">
                         <h3 className="text-xl font-bold text-white">Similar Videos</h3>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                         {recommendations.map(video => {
                             const inQueue = queuedVideos.find(v => v.id === video.id);
                             return (
-                                <div key={video.id} className="card bg-base-300/60 shadow-md cursor-pointer hover:-translate-y-1 hover:shadow-primary/20 hover:border-primary/50 border border-transparent transition-all duration-300 overflow-hidden group" onClick={() => onRecommendationClick && onRecommendationClick(video)}>
+                                <div key={video.id} className="card bg-base-300 shadow-xl cursor-pointer hover:-translate-y-1 hover:shadow-primary/20 hover:border-primary/50 border border-transparent transition-all duration-300 overflow-hidden group" onClick={() => onRecommendationClick && onRecommendationClick(video)}>
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -185,12 +185,12 @@ const VideoView = ({
                                         {inQueue ? '✓' : '+'}
                                     </button>
                                     <figure className="aspect-video relative">
-                                        <img src={video.thumbnail} alt={video.title} className="w-full object-cover" />
+                                        <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover" />
                                         {video.duration ? <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs text-white font-mono">{new Date(video.duration * 1000).toISOString().substr(14, 5)}</div> : null}
                                     </figure>
-                                    <div className="px-3 py-2">
-                                        <MarqueeTitle text={video.title} className="font-bold text-sm text-white" />
-                                        <p className="text-xs text-base-content/60 truncate mt-0.5">{video.channel}</p>
+                                    <div className="px-3 py-2 flex flex-col justify-center">
+                                        <MarqueeTitle text={video.title} className="font-bold text-sm text-white w-full" />
+                                        <p className="text-xs text-base-content/60 truncate mt-0.5 w-full">{video.channel}</p>
                                     </div>
                                 </div>
                             );

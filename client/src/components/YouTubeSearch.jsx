@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import MarqueeTitle from './MarqueeTitle';
 import VideoTrimmer from './VideoTrimmer';
 import VideoView from './VideoView';
+import { Search } from 'lucide-react';
 
 const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo }) => {
     const [query, setQuery] = useState('');
@@ -140,10 +141,11 @@ const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo }) => {
     };
 
     const fetchRecommendations = async (video) => {
-        if (!video) return;
+        if (!video || !video.id) return;
         setLoadingRecs(true);
         try {
-            const res = await fetch(`http://localhost:3001/api/ytdl/related?id=${encodeURIComponent(video.id)}&channel=${encodeURIComponent(video.channel)}`);
+            const channel = video.channel || '';
+            const res = await fetch(`http://localhost:3001/api/ytdl/related?id=${encodeURIComponent(video.id)}&channel=${encodeURIComponent(channel)}`);
             const data = await res.json();
             if (res.ok) {
                 // Filter out the current video from recommendations
@@ -208,12 +210,12 @@ const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo }) => {
             <form onSubmit={handleSearch} className="max-w-2xl mx-auto w-full flex gap-2 shrink-0 px-2">
                 <input
                     type="text"
-                    className="input input-bordered input-primary flex-1 shadow-sm"
+                    className="input input-bordered input-primary flex-1 shadow-sm text-lg py-2 h-auto"
                     placeholder="Search YouTube..."
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                 />
-                <button type="submit" className="btn btn-primary shadow-md shadow-primary/20" disabled={loading}>
+                <button type="submit" className="btn btn-primary btn-lg shadow-md shadow-primary/20" disabled={loading}>
                     {loading ? <span className="loading loading-spinner"></span> : 'Search'}
                 </button>
             </form>
@@ -223,7 +225,16 @@ const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo }) => {
                 <span>{error}</span>
             </div>}
 
-            <div className="flex-1 overflow-hidden flex min-h-0 bg-base-200/30 rounded-3xl border border-white/5 p-4 shadow-inner">
+            <div className={`flex-1 overflow-hidden flex min-h-0 bg-base-200/30 rounded-3xl border border-white/5 shadow-inner ${(searchResults.length > 0 || videoInfo) ? 'p-4' : 'p-0 border-none bg-transparent'}`}>
+                {searchResults.length === 0 && !videoInfo && !loading && (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+                        <div className="max-w-md">
+                            <Search className="w-16 h-16 mx-auto text-base-content/30 mb-4" />
+                            <h3 className="text-xl font-bold text-white mb-2">Search YouTube</h3>
+                            <p className="text-base-content/60">Enter keywords above to find videos, music, and more</p>
+                        </div>
+                    </div>
+                )}
                 {searchResults.length > 0 && !videoInfo && (
                     <div className="flex flex-col h-full flex-1 overflow-hidden">
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto pr-2 pb-4 pt-2">
@@ -239,7 +250,7 @@ const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo }) => {
                                             {inQueue ? '✓' : '+'}
                                         </button>
                                         <figure className="aspect-video relative">
-                                            <img src={video.thumbnail} alt={video.title} className="w-full object-cover" />
+                                            <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover" />
                                             {video.duration ? <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs text-white font-mono">{new Date(video.duration * 1000).toISOString().substr(14, 5)}</div> : null}
                                         </figure>
                                         <div className="px-3 py-2 flex flex-col justify-center">
