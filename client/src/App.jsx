@@ -107,7 +107,7 @@ function App() {
             {queuedVideos.map(video => (
               <div
                 key={video.id}
-                className="group flex items-center gap-3 bg-white/5 hover:bg-white/10 p-3 rounded-xl relative overflow-hidden transition-all duration-200 border border-transparent hover:border-primary/50 cursor-pointer"
+                className="group flex items-center gap-3 bg-white/5 hover:bg-white/10 p-3 rounded-xl relative overflow-hidden transition-all duration-200 border border-transparent hover:border-primary/50 cursor-pointer shrink-0 h-20"
                 onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-primary', 'bg-primary/10'); }}
                 onDragLeave={(e) => { e.currentTarget.classList.remove('border-primary', 'bg-primary/10'); }}
                 onDrop={(e) => { e.currentTarget.classList.remove('border-primary', 'bg-primary/10'); handleDrop(e, video.id); }}
