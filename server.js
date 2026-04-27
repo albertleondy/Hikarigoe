@@ -10,6 +10,10 @@ const cheerio = require('cheerio');
 const app = express();
 const PORT = 3001;
 
+// Progress Tracking for Downloads
+const downloadProgress = new Map();
+const activeJobs = new Set();
+
 
 
 
@@ -351,7 +355,7 @@ app.post('/api/ytdl/info', async (req, res) => {
     try {
         const stdout = await ytDlpWrap.execPromise([url, '--dump-json', '--flat-playlist', ...getCookieArgs()]);
         const lines = stdout.trim().split('\n').filter(line => line.trim().length > 0);
-        
+
         if (lines.length > 1) {
             // It's a playlist!
             const results = lines.map(line => {
@@ -372,18 +376,18 @@ app.post('/api/ytdl/info', async (req, res) => {
             res.json({ isPlaylist: true, videos: results });
         } else if (lines.length === 1) {
             const metadata = JSON.parse(lines[0]);
-            
+
             if (metadata._type === 'playlist' && metadata.entries) {
-                 const results = metadata.entries.map(meta => ({
+                const results = metadata.entries.map(meta => ({
                     id: meta.id,
                     title: meta.title,
                     url: `https://www.youtube.com/watch?v=${meta.id}`,
                     thumbnail: meta.thumbnails?.[0]?.url || meta.thumbnail || "",
                     duration: meta.duration,
                     channel: meta.uploader || meta.channel || meta.uploader_id
-                 })).filter(item => item.id);
-                 res.json({ isPlaylist: true, videos: results });
-                 return;
+                })).filter(item => item.id);
+                res.json({ isPlaylist: true, videos: results });
+                return;
             }
 
             res.json({
@@ -395,7 +399,7 @@ app.post('/api/ytdl/info', async (req, res) => {
                 channel: metadata.uploader
             });
         } else {
-             res.status(404).json({ error: 'No data returned' });
+            res.status(404).json({ error: 'No data returned' });
         }
     } catch (error) {
         console.error("yt-dlp info error:", error);
@@ -523,6 +527,14 @@ app.get('/api/ytdl/status', (req, res) => {
     res.json({ cookiesFound, browserCookie: browserCookieSetting });
 });
 
+app.get('/api/ytdl/progress/:jobId', (req, res) => {
+    const { jobId } = req.params;
+    if (!downloadProgress.has(jobId)) {
+        return res.status(404).json({ error: 'Job not found' });
+    }
+    res.json(downloadProgress.get(jobId));
+});
+
 app.post('/api/ytdl/cookie_settings', (req, res) => {
     const { browser, cookieText } = req.body;
     try {
@@ -558,8 +570,17 @@ app.post('/api/ytdl/prepare_lyrics', (req, res) => {
 });
 
 app.get('/api/ytdl/download', async (req, res) => {
-    const { url, type, embedThumbnail, jobId, startTime, endTime } = req.query;
+    const { url, type, embedThumbnail, jobId, startTime, endTime, clientJobId } = req.query;
     if (!url || !type) return res.status(400).json({ error: 'URL and type are required' });
+
+    const currentJobId = clientJobId || Math.random().toString(36).substring(2, 15);
+    downloadProgress.set(currentJobId, {
+        progress: 0,
+        status: 'Initializing',
+        title: 'Determining title...',
+        eta: '',
+        speed: ''
+    });
 
     const lyricsData = jobId ? lyricsJobs.get(jobId) : null;
     console.log(`\n📥 Downloading ${type} from: ${url} (Embed Thumb: ${embedThumbnail}, Has Lyrics: ${!!lyricsData}, Trim: ${startTime}-${endTime})`);
@@ -603,6 +624,7 @@ app.get('/api/ytdl/download', async (req, res) => {
             const metaStdout = await ytDlpWrap.execPromise(metaArgs);
             const meta = JSON.parse(metaStdout);
             title = meta.title.replace(/[<>"\/\\|?*:]/g, '_');
+            downloadProgress.set(currentJobId, { ...downloadProgress.get(currentJobId), title });
         } catch (e) {
             console.error("Meta fetch failed, using default name", e);
         }
@@ -626,7 +648,30 @@ app.get('/api/ytdl/download', async (req, res) => {
             finalFilename = `${title}.mp4`;
         }
 
-        await ytDlpWrap.execPromise(args);
+        downloadProgress.set(currentJobId, { ...downloadProgress.get(currentJobId), status: 'Downloading' });
+
+        // Using exec to capture progress
+        const ytDlpEventEmitter = ytDlpWrap.exec(args);
+
+        await new Promise((resolve, reject) => {
+            ytDlpEventEmitter.on('progress', (progress) => {
+                downloadProgress.set(currentJobId, {
+                    ...downloadProgress.get(currentJobId),
+                    progress: progress.percent,
+                    eta: progress.eta,
+                    speed: progress.currentSpeed,
+                    totalSize: progress.totalSize
+                });
+            });
+
+            ytDlpEventEmitter.on('close', () => {
+                resolve();
+            });
+
+            ytDlpEventEmitter.on('error', (error) => {
+                reject(error);
+            });
+        });
 
         const files = fs.readdirSync(tempDir);
         let downloadedFile = files.find(f => f.startsWith(`dl_${uniqueId}`));
@@ -639,6 +684,7 @@ app.get('/api/ytdl/download', async (req, res) => {
 
         // FFMPEG Embedding Lyrics Post-Process
         if (lyricsData && (type === 'audio' || type === 'opus')) {
+            downloadProgress.set(currentJobId, { ...downloadProgress.get(currentJobId), status: 'Post-processing (Lyrics)', progress: 95 });
             console.log("Adding lyrics metadata via ffmpeg...");
 
             // For opus format, ffmpeg's opus muxer rejects video streams so mapping existing thumbnail (picture stream)
@@ -677,9 +723,15 @@ app.get('/api/ytdl/download', async (req, res) => {
             finalFilename = `${title}${actualExt}`;
         }
 
+        downloadProgress.set(currentJobId, { ...downloadProgress.get(currentJobId), status: 'Completing', progress: 100 });
         console.log(`Sending file: ${fullPath} as ${finalFilename}`);
         res.download(fullPath, finalFilename, (err) => {
             if (err) console.error("Send file error:", err);
+            // Clean up progress after a short delay to allow client to see 100%
+            setTimeout(() => {
+                downloadProgress.delete(currentJobId);
+            }, 5000);
+
             try {
                 fs.unlinkSync(fullPath);
                 console.log("Temp file deleted.");
@@ -690,6 +742,10 @@ app.get('/api/ytdl/download', async (req, res) => {
 
     } catch (error) {
         console.error("Download processing error:", error);
+        downloadProgress.set(currentJobId, { ...downloadProgress.get(currentJobId), status: 'Error: ' + error.message });
+        setTimeout(() => {
+            downloadProgress.delete(currentJobId);
+        }, 10000);
         if (!res.headersSent) res.status(500).json({ error: 'Download failed: ' + error.message });
     }
 });

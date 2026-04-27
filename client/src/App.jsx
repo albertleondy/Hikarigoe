@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import LyricFetcher from './components/LyricFetcher';
 import YouTubeFetcher from './components/YouTubeFetcher';
 import YouTubeSearch from './components/YouTubeSearch';
+import DownloadModal from './components/DownloadModal';
 
 import MarqueeTitle from './components/MarqueeTitle';
 
@@ -12,6 +13,11 @@ function App() {
   const [queuedVideos, setQueuedVideos] = useState([]);
   const [queueEmbedThumbnail, setQueueEmbedThumbnail] = useState(false);
   const [externalSelectedVideo, setExternalSelectedVideo] = useState(null);
+
+  // Download & Progress State
+  const [downloadJob, setDownloadJob] = useState(null);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const pollingInterval = useRef(null);
 
   const addToQueue = (video) => {
     if (!queuedVideos.find(v => v.id === video.id)) {
@@ -29,9 +35,81 @@ function App() {
     ));
   };
 
+  const triggerDownload = (url, type, options = {}) => {
+    const clientJobId = 'job_' + Math.random().toString(36).substring(2, 11);
+    const { embedThumbnail, jobId, startTime, endTime } = options;
+
+    let downloadUrl = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(url)}&type=${type}&clientJobId=${clientJobId}`;
+    if (embedThumbnail) downloadUrl += `&embedThumbnail=true`;
+    if (jobId) downloadUrl += `&jobId=${jobId}`;
+    if (startTime !== undefined) downloadUrl += `&startTime=${startTime}`;
+    if (endTime !== undefined) downloadUrl += `&endTime=${endTime}`;
+
+    console.log('Initiating download:', downloadUrl);
+
+    // Initial state
+    setDownloadJob({
+      id: clientJobId,
+      status: 'Connecting...',
+      progress: 0,
+      title: 'Requesting server...'
+    });
+    setIsDownloadModalOpen(true);
+
+    // Start polling
+    startPolling(clientJobId);
+
+    // Trigger actual download via hidden iframe or window location
+    // Using an iframe is better as it doesn't navigate away/flash
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = downloadUrl;
+    document.body.appendChild(iframe);
+
+    // Clean up iframe after a while
+    setTimeout(() => {
+      document.body.removeChild(iframe);
+    }, 30000);
+  };
+
+  const startPolling = (jobId) => {
+    if (pollingInterval.current) clearInterval(pollingInterval.current);
+
+    pollingInterval.current = setInterval(async () => {
+      try {
+        const res = await fetch(`http://localhost:3001/api/ytdl/progress/${jobId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setDownloadJob(data);
+
+          if (data.status === 'Completing' || data.status.startsWith('Error')) {
+            clearInterval(pollingInterval.current);
+            pollingInterval.current = null;
+          }
+        } else {
+          // Job might have been cleaned up or server restarted
+          clearInterval(pollingInterval.current);
+          pollingInterval.current = null;
+        }
+      } catch (err) {
+        console.error("Polling error:", err);
+        clearInterval(pollingInterval.current);
+        pollingInterval.current = null;
+      }
+    }, 1000);
+  };
+
+  const closeDownloadModal = () => {
+    setIsDownloadModalOpen(false);
+    if (pollingInterval.current) {
+      clearInterval(pollingInterval.current);
+      pollingInterval.current = null;
+    }
+  };
+
   const downloadAll = async (type) => {
     for (const video of queuedVideos) {
-      let jobId = '';
+      let lyricsJobId = '';
       if (video.lyricsPayload) {
         try {
           const res = await fetch('http://localhost:3001/api/ytdl/prepare_lyrics', {
@@ -40,18 +118,31 @@ function App() {
             body: JSON.stringify({ lyricsData: video.lyricsPayload })
           });
           const data = await res.json();
-          if (data.jobId) jobId = data.jobId;
+          if (data.jobId) lyricsJobId = data.jobId;
         } catch (err) {
           console.error("Failed to prepare lyrics", err);
         }
       }
 
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(video.url)}&type=${type}&embedThumbnail=${queueEmbedThumbnail}${jobId ? `&jobId=${jobId}` : ''}`;
-      document.body.appendChild(iframe);
+      // Instead of manual iframe, use triggerDownload for each (sequential)
+      // We wait for the modal to be closed or the download to finish before next one
+      triggerDownload(video.url, type, {
+        embedThumbnail: queueEmbedThumbnail,
+        jobId: lyricsJobId
+      });
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Wait for the current job to finish (polling stops)
+      await new Promise(resolve => {
+        const check = setInterval(() => {
+          if (!pollingInterval.current) {
+            clearInterval(check);
+            resolve();
+          }
+        }, 500);
+      });
+
+      // Small gap between jobs
+      await new Promise(r => setTimeout(r, 1000));
     }
   };
 
@@ -84,9 +175,11 @@ function App() {
 
         <div className="flex-1 overflow-hidden relative mt-2 w-full max-w-6xl mx-auto flex flex-col">
           {currentView === 'lyrics' && <LyricFetcher />}
-          {currentView === 'youtube-dl' && <YouTubeFetcher addToQueue={addToQueue} queuedVideos={queuedVideos} />}
-          {currentView === 'youtube-search' && <YouTubeSearch addToQueue={addToQueue} queuedVideos={queuedVideos} externalSelectedVideo={externalSelectedVideo} />}
+          {currentView === 'youtube-dl' && <YouTubeFetcher addToQueue={addToQueue} queuedVideos={queuedVideos} triggerDownload={triggerDownload} />}
+          {currentView === 'youtube-search' && <YouTubeSearch addToQueue={addToQueue} queuedVideos={queuedVideos} externalSelectedVideo={externalSelectedVideo} triggerDownload={triggerDownload} />}
         </div>
+
+        <DownloadModal isOpen={isDownloadModalOpen} jobData={downloadJob} onClose={closeDownloadModal} />
       </div>
 
       {queuedVideos.length > 0 && (

@@ -4,7 +4,7 @@ import VideoTrimmer from './VideoTrimmer';
 import VideoView from './VideoView';
 import { Search } from 'lucide-react';
 
-const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo }) => {
+const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo, triggerDownload }) => {
     const [query, setQuery] = useState('');
     const [loading, setLoading] = useState(false);
     const [searchResults, setSearchResults] = useState([]);
@@ -112,19 +112,19 @@ const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo }) => {
 
     const handleDownload = (type, url = query) => {
         if (!url) return;
-        let downloadUrl = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(url)}&type=${type}&embedThumbnail=${embedThumbnail}`;
 
         // Only add trim parameters if user has actually trimmed the video and values are valid
         const hasValidTrim = trimRange.endTime > 0 &&
             trimRange.startTime < trimRange.endTime &&
             (trimRange.startTime > 0 || trimRange.endTime < (videoInfo?.duration || Infinity));
 
-        if (hasValidTrim) {
-            downloadUrl += `&startTime=${trimRange.startTime}&endTime=${trimRange.endTime}`;
-        }
+        const options = {
+            embedThumbnail,
+            startTime: hasValidTrim ? trimRange.startTime : undefined,
+            endTime: hasValidTrim ? trimRange.endTime : undefined
+        };
 
-        console.log('Downloading with URL:', downloadUrl);
-        window.location.href = downloadUrl;
+        triggerDownload(url, type, options);
     };
 
     const selectVideo = (video) => {

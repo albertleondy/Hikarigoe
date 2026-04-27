@@ -4,7 +4,7 @@ import MarqueeTitle from './MarqueeTitle';
 import VideoView from './VideoView';
 import { Play } from 'lucide-react';
 
-const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
+const YouTubeFetcher = ({ addToQueue, queuedVideos, triggerDownload }) => {
     const [url, setUrl] = useState('');
     const [loading, setLoading] = useState(false);
     const [videoInfo, setVideoInfo] = useState(null);
@@ -125,18 +125,18 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos }) => {
 
     const handleDownload = (type, currentVideoUrl = url, currentVideoInfo = videoInfo) => {
         if (!currentVideoUrl) return;
-        let downloadUrl = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(currentVideoUrl)}&type=${type}&embedThumbnail=${embedThumbnail}`;
 
         const hasValidTrim = trimRange.endTime > 0 &&
             trimRange.startTime < trimRange.endTime &&
             (trimRange.startTime > 0 || trimRange.endTime < (currentVideoInfo?.duration || Infinity));
 
-        if (hasValidTrim) {
-            downloadUrl += `&startTime=${trimRange.startTime}&endTime=${trimRange.endTime}`;
-        }
+        const options = {
+            embedThumbnail,
+            startTime: hasValidTrim ? trimRange.startTime : undefined,
+            endTime: hasValidTrim ? trimRange.endTime : undefined
+        };
 
-        console.log('Downloading with URL:', downloadUrl);
-        window.location.href = downloadUrl;
+        triggerDownload(currentVideoUrl, type, options);
     };
 
     const handleVideoClick = (video) => {
