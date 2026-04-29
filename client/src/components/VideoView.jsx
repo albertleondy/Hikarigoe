@@ -162,11 +162,11 @@ const VideoView = ({
                     <div className="flex items-center gap-2 mb-4">
                         <h3 className="text-xl font-bold text-white">Similar Videos</h3>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 flex-1 min-h-0 auto-rows-min">
                         {recommendations.map(video => {
                             const inQueue = queuedVideos.find(v => v.id === video.id);
                             return (
-                                <div key={video.id} className="card bg-base-300 shadow-xl cursor-pointer hover:-translate-y-1 hover:shadow-primary/20 hover:border-primary/50 border border-transparent transition-all duration-300 overflow-hidden group" onClick={() => onRecommendationClick && onRecommendationClick(video)}>
+                                <div key={video.id} className="card bg-base-300 shadow-xl cursor-pointer hover:-translate-y-1 hover:shadow-primary/20 hover:border-primary/50 border border-transparent transition-all duration-300 overflow-hidden group h-fit min-h-[250px] sm:min-h-0" onClick={() => onRecommendationClick && onRecommendationClick(video)}>
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -184,7 +184,7 @@ const VideoView = ({
                                     >
                                         {inQueue ? '✓' : '+'}
                                     </button>
-                                    <figure className="aspect-video relative">
+                                    <figure className="aspect-video relative w-full min-h-[160px]">
                                         <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover" />
                                         {video.duration ? <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs text-white font-mono">{new Date(video.duration * 1000).toISOString().substr(14, 5)}</div> : null}
                                     </figure>

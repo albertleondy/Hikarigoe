@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 
-const LyricFetcher = () => {
+const LyricFetcher = ({ queuedVideos = [], onAssignLyrics }) => {
     const [query, setQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [selectedLyrics, setSelectedLyrics] = useState(null);
     const [loadingSearch, setLoadingSearch] = useState(false);
     const [loadingLyrics, setLoadingLyrics] = useState(false);
     const [error, setError] = useState(null);
+    const [showQueuePicker, setShowQueuePicker] = useState(false);
 
     const handleSearch = async (e) => {
         e.preventDefault();
@@ -70,10 +71,21 @@ const LyricFetcher = () => {
         URL.revokeObjectURL(url);
     };
 
+    const handleAssignToVideo = (videoId) => {
+        const lrcContent = selectedLyrics.lyrics.map(l => `${l.timestamp} ${l.romaji}`).join('\n');
+        const payload = {
+            title: `${selectedLyrics.song} - ${selectedLyrics.artist}`,
+            raw: lrcContent
+        };
+        onAssignLyrics(videoId, payload);
+        setShowQueuePicker(false);
+        alert('Lyrics assigned to video!');
+    };
+
     return (
         <div className="flex flex-col md:flex-row gap-6 h-full min-h-0 animate-fade-in w-full">
             {/* LEFT PANEL: SEARCH & LIST */}
-            <div className="w-full md:w-1/3 flex flex-col gap-4 bg-base-200/40 border border-white/5 rounded-3xl p-5 shadow-inner shrink-0">
+            <div className={`w-full md:w-1/3 flex-col gap-4 bg-base-200/40 border border-white/5 rounded-[2rem] p-4 md:p-5 shadow-inner shrink-0 ${selectedLyrics ? 'hidden md:flex' : 'flex'}`}>
                 <form onSubmit={handleSearch} className="flex gap-2 w-full shrink-0">
                     <input
                         type="text"
@@ -118,15 +130,15 @@ const LyricFetcher = () => {
             </div>
 
             {/* RIGHT PANEL: LYRICS DISPLAY */}
-            <div className="w-full md:w-2/3 flex flex-col bg-base-300/80 backdrop-blur-md rounded-3xl shadow-2xl border border-white/5 overflow-hidden relative">
+            <div className={`w-full md:w-2/3 flex-col bg-base-300/80 backdrop-blur-md rounded-[2rem] shadow-2xl border border-white/5 overflow-hidden relative ${!selectedLyrics && !loadingLyrics ? 'hidden md:flex' : 'flex'}`}>
                 {loadingLyrics ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-base-300/50 backdrop-blur-sm z-10">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-base-300/50 backdrop-blur-sm z-10 transition-all">
                         <span className="loading loading-ring loading-lg text-primary"></span>
                         <p className="font-medium text-primary tracking-widest animate-pulse">Fetching & Converting Lyrics...</p>
                     </div>
                 ) : selectedLyrics ? (
                     <div
-                        className="flex flex-col h-full items-center p-6 animate-fade-in relative group"
+                        className="flex flex-col h-full items-center p-4 md:p-6 animate-fade-in relative group"
                         draggable
                         onDragStart={(e) => {
                             const lrcContent = selectedLyrics.lyrics.map(l => `${l.timestamp} ${l.romaji}`).join('\n');
@@ -140,13 +152,21 @@ const LyricFetcher = () => {
                         style={{ cursor: 'grab' }}
                         title="Drag me into a video in your Download Queue!"
                     >
-                        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-primary/20 text-primary px-3 py-1 text-xs rounded-full font-bold flex items-center gap-2">
-                            <span className="animate-bounce">↑</span> Drag to Queue
+                        <div className="w-full flex justify-between items-start mb-2 md:mb-0 shrink-0">
+                            <button
+                                className="btn btn-ghost btn-sm md:hidden text-base-content/60"
+                                onClick={() => setSelectedLyrics(null)}
+                            >
+                                ← Back
+                            </button>
+                            <div className="hidden md:flex absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-primary/20 text-primary px-3 py-1 text-xs rounded-full font-bold items-center gap-2">
+                                <span className="animate-bounce">↑</span> Drag to Queue
+                            </div>
                         </div>
 
-                        <div className="text-center border-b border-white/10 pb-4 w-full shrink-0">
-                            <h2 className="text-3xl font-bold text-white m-0 tracking-tight">{selectedLyrics.song}</h2>
-                            <h3 className="text-lg text-base-content/70 m-0 mt-1">{selectedLyrics.artist}</h3>
+                        <div className="text-center border-b border-white/10 pb-4 w-full shrink-0 mt-2 md:mt-0">
+                            <h2 className="text-2xl md:text-3xl font-bold text-white m-0 tracking-tight">{selectedLyrics.song}</h2>
+                            <h3 className="text-md md:text-lg text-base-content/70 m-0 mt-1">{selectedLyrics.artist}</h3>
                             <div className="mt-3 flex flex-col items-center gap-2">
                                 <span className="badge badge-neutral shadow-sm">Source: {selectedLyrics.source}</span>
                                 <p className="text-xs font-semibold text-secondary animate-pulse m-0 bg-secondary/10 px-3 py-1 rounded-full">
@@ -165,20 +185,57 @@ const LyricFetcher = () => {
                             ))}
                         </div>
 
-                        <div className="flex gap-4 w-full shrink-0 justify-center pt-4 border-t border-white/10">
+                        <div className="flex flex-wrap gap-2 w-full shrink-0 justify-center pt-4 border-t border-white/10">
                             <button
-                                className="btn btn-outline hover:text-white"
+                                className="btn btn-outline btn-sm md:btn-md hover:text-white"
                                 onClick={() => navigator.clipboard.writeText(selectedLyrics.lyrics.map(l => `${l.timestamp} ${l.romaji}`).join('\n'))}
                             >
-                                Copy to Clipboard
+                                Copy
                             </button>
+
+                            {queuedVideos.length > 0 && (
+                                <button
+                                    className="btn btn-secondary btn-sm md:btn-md shadow-lg shadow-secondary/20"
+                                    onClick={() => setShowQueuePicker(true)}
+                                >
+                                    Apply to Queue
+                                </button>
+                            )}
+
                             <button
-                                className="btn btn-primary shadow-lg shadow-primary/20"
+                                className="btn btn-primary btn-sm md:btn-md shadow-lg shadow-primary/20"
                                 onClick={handleDownload}
                             >
                                 Download .lrc
                             </button>
                         </div>
+
+                        {/* MOBILE QUEUE PICKER OVERLAY */}
+                        {showQueuePicker && (
+                            <div className="absolute inset-0 bg-base-300/95 backdrop-blur-md z-50 flex flex-col p-6 animate-fade-in">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-xl font-bold text-white">Select Video</h3>
+                                    <button className="btn btn-circle btn-ghost" onClick={() => setShowQueuePicker(false)}>×</button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto flex flex-col gap-3 custom-scrollbar">
+                                    {queuedVideos.map(video => (
+                                        <div
+                                            key={video.id}
+                                            className="flex items-center gap-3 bg-white/5 hover:bg-white/10 p-3 rounded-xl cursor-pointer transition-colors border border-white/5 hover:border-primary/50"
+                                            onClick={() => handleAssignToVideo(video.id)}
+                                        >
+                                            <img src={video.thumbnail} alt="" className="w-16 h-10 object-cover rounded-md" />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="font-bold text-white text-sm truncate">{video.title}</div>
+                                                <div className="text-xs text-base-content/60">{video.channel}</div>
+                                            </div>
+                                            {video.lyricsPayload && <span className="badge badge-primary badge-xs">Has Lyrics</span>}
+                                        </div>
+                                    ))}
+                                </div>
+                                <button className="btn btn-neutral mt-6" onClick={() => setShowQueuePicker(false)}>Cancel</button>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-base-content/40 italic">

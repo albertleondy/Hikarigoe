@@ -225,7 +225,7 @@ const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo, trigge
                 <span>{error}</span>
             </div>}
 
-            <div className={`flex-1 overflow-hidden flex min-h-0 bg-base-200/30 rounded-3xl border border-white/5 shadow-inner ${(searchResults.length > 0 || videoInfo) ? 'p-4' : 'p-0 border-none bg-transparent'}`}>
+            <div className={`flex-1 overflow-hidden flex flex-col min-h-0 bg-base-200/30 rounded-3xl border border-white/5 shadow-inner ${(searchResults.length > 0 || videoInfo) ? 'p-4' : 'p-0 border-none bg-transparent'}`}>
                 {searchResults.length === 0 && !videoInfo && !loading && (
                     <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
                         <div className="max-w-md">
@@ -237,11 +237,11 @@ const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo, trigge
                 )}
                 {searchResults.length > 0 && !videoInfo && (
                     <div className="flex flex-col h-full flex-1 overflow-hidden">
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto pr-2 pb-4 pt-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto flex-1 min-h-0 auto-rows-min pr-2 pb-4 pt-2">
                             {currentResults.map(video => {
                                 const inQueue = queuedVideos.find(v => v.id === video.id);
                                 return (
-                                    <div key={video.id} className="card bg-base-300 shadow-xl cursor-pointer hover:-translate-y-1 hover:shadow-primary/20 hover:border-primary/50 border border-transparent transition-all duration-300 overflow-hidden group" onClick={() => selectVideo(video)}>
+                                    <div key={video.id} className="card bg-base-300 shadow-xl cursor-pointer hover:-translate-y-1 hover:shadow-primary/20 hover:border-primary/50 border border-transparent transition-all duration-300 overflow-hidden group h-fit min-h-[250px] sm:min-h-0" onClick={() => selectVideo(video)}>
                                         <button
                                             onClick={(e) => handleAddToQueue(e, video)}
                                             className={`absolute top-2 right-2 btn btn-circle btn-sm z-10 ${inQueue ? 'btn-success text-white pointer-events-none' : 'btn-neutral opacity-0 group-hover:opacity-100'}`}
@@ -249,7 +249,7 @@ const YouTubeSearch = ({ addToQueue, queuedVideos, externalSelectedVideo, trigge
                                         >
                                             {inQueue ? '✓' : '+'}
                                         </button>
-                                        <figure className="aspect-video relative">
+                                        <figure className="aspect-video relative w-full min-h-[160px]">
                                             <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover" />
                                             {video.duration ? <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs text-white font-mono">{new Date(video.duration * 1000).toISOString().substr(14, 5)}</div> : null}
                                         </figure>
