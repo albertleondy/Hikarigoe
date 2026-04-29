@@ -60,11 +60,11 @@ const VideoTrimmer = ({ duration, onTrimChange }) => {
         setIsDragging(handle);
     };
 
-    const handleMouseMove = (e) => {
+    const updatePosition = (clientX) => {
         if (!isDragging || !sliderRef.current) return;
 
         const rect = sliderRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
+        const x = clientX - rect.left;
         const percentage = Math.max(0, Math.min(1, x / rect.width));
         const newTime = percentage * duration;
 
@@ -79,7 +79,21 @@ const VideoTrimmer = ({ duration, onTrimChange }) => {
         }
     };
 
+    const handleMouseMove = (e) => {
+        updatePosition(e.clientX);
+    };
+
+    const handleTouchMove = (e) => {
+        if (e.touches && e.touches[0]) {
+            updatePosition(e.touches[0].clientX);
+        }
+    };
+
     const handleMouseUp = () => {
+        setIsDragging(null);
+    };
+
+    const handleTouchEnd = () => {
         setIsDragging(null);
     };
 
@@ -87,9 +101,13 @@ const VideoTrimmer = ({ duration, onTrimChange }) => {
         if (isDragging) {
             window.addEventListener('mousemove', handleMouseMove);
             window.addEventListener('mouseup', handleMouseUp);
+            window.addEventListener('touchmove', handleTouchMove, { passive: false });
+            window.addEventListener('touchend', handleTouchEnd);
             return () => {
                 window.removeEventListener('mousemove', handleMouseMove);
                 window.removeEventListener('mouseup', handleMouseUp);
+                window.removeEventListener('touchmove', handleTouchMove);
+                window.removeEventListener('touchend', handleTouchEnd);
             };
         }
     }, [isDragging, startTime, endTime, duration]);
@@ -104,8 +122,8 @@ const VideoTrimmer = ({ duration, onTrimChange }) => {
     };
 
     return (
-        <div className="w-full bg-base-300/50 p-5 rounded-xl border border-white/5">
-            <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+        <div className="w-full bg-base-300/50 p-4 md:p-5 rounded-xl border border-white/5">
+            <h4 className="text-base md:text-lg font-bold text-white mb-4 flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                     <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
                 </svg>
@@ -113,21 +131,21 @@ const VideoTrimmer = ({ duration, onTrimChange }) => {
             </h4>
 
             <div className="mb-4">
-                <div className="flex justify-between items-center mb-2">
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm font-semibold text-white">Start:</label>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-2">
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <label className="text-xs md:text-sm font-semibold text-white min-w-[35px]">Start:</label>
                         <input
                             type="text"
-                            className="input input-bordered input-sm w-24 font-mono"
+                            className="input input-bordered input-sm flex-1 sm:w-24 font-mono text-xs md:text-sm"
                             value={formatTime(startTime)}
                             onChange={handleStartInputChange}
                         />
                     </div>
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm font-semibold text-white">End:</label>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <label className="text-xs md:text-sm font-semibold text-white min-w-[35px]">End:</label>
                         <input
                             type="text"
-                            className="input input-bordered input-sm w-24 font-mono"
+                            className="input input-bordered input-sm flex-1 sm:w-24 font-mono text-xs md:text-sm"
                             value={formatTime(endTime)}
                             onChange={handleEndInputChange}
                         />
@@ -163,6 +181,7 @@ const VideoTrimmer = ({ duration, onTrimChange }) => {
                     className={`absolute top-0 bottom-0 cursor-ew-resize z-10 ${isDragging === 'start' ? 'scale-x-150' : 'hover:scale-x-150'} transition-transform`}
                     style={{ left: `${(startTime / duration) * 100}%` }}
                     onMouseDown={handleMouseDown('start')}
+                    onTouchStart={handleMouseDown('start')}
                 >
                     <div className="absolute top-1/2 -translate-y-1/2 -left-1.5 w-4 h-4 bg-primary rounded-full shadow-lg border-2 border-white hover:scale-125 transition-transform pointer-events-none"></div>
                     <div className="absolute inset-y-0 -left-3 w-7"></div>
@@ -173,6 +192,7 @@ const VideoTrimmer = ({ duration, onTrimChange }) => {
                     className={`absolute top-0 bottom-0 cursor-ew-resize z-10 ${isDragging === 'end' ? 'scale-x-150' : 'hover:scale-x-150'} transition-transform`}
                     style={{ left: `${(endTime / duration) * 100}%` }}
                     onMouseDown={handleMouseDown('end')}
+                    onTouchStart={handleMouseDown('end')}
                 >
                     <div className="absolute top-1/2 -translate-y-1/2 -left-1.5 w-4 h-4 bg-primary rounded-full shadow-lg border-2 border-white hover:scale-125 transition-transform pointer-events-none"></div>
                     <div className="absolute inset-y-0 -left-3 w-7"></div>

@@ -81,22 +81,22 @@ const VideoView = ({
 
                     {/* Download Options Card */}
                     <div className="card w-full bg-base-300 shadow-2xl overflow-hidden border border-white/5">
-                        <div className="card-body px-6 py-6">
+                        <div className="card-body px-4 md:px-6 py-6">
                             <h3 className="card-title text-lg text-white mb-4">Download Options</h3>
-                            <div className="card-actions flex-col sm:flex-row justify-center gap-3 w-full">
-                                <button className="btn btn-neutral flex-1 py-3 h-auto" onClick={() => handleVideoDownload('video')}>
+                            <div className="card-actions flex flex-col sm:flex-row gap-3 w-full">
+                                <button className="btn btn-neutral w-full sm:flex-1 py-3 h-auto" onClick={() => handleVideoDownload('video')}>
                                     <div className="flex flex-col items-center">
                                         <span className="font-bold">MP4</span>
                                         <span className="text-[0.65rem] opacity-60">High Quality Video</span>
                                     </div>
                                 </button>
-                                <button className="btn btn-secondary shadow-lg shadow-secondary/20 flex-1 py-3 h-auto" onClick={() => handleVideoDownload('audio')}>
+                                <button className="btn btn-secondary shadow-lg shadow-secondary/20 w-full sm:flex-1 py-3 h-auto" onClick={() => handleVideoDownload('audio')}>
                                     <div className="flex flex-col items-center">
                                         <span className="font-bold">MP3</span>
                                         <span className="text-[0.65rem] opacity-80">Standard Audio</span>
                                     </div>
                                 </button>
-                                <button className="btn btn-primary shadow-lg shadow-primary/20 flex-1 py-3 h-auto" onClick={() => handleVideoDownload('opus')}>
+                                <button className="btn btn-primary shadow-lg shadow-primary/20 w-full sm:flex-1 py-3 h-auto" onClick={() => handleVideoDownload('opus')}>
                                     <div className="flex flex-col items-center">
                                         <span className="font-bold text-white">Opus</span>
                                         <span className="text-[0.65rem] text-white/80">Highest Quality Audio</span>
@@ -111,9 +111,9 @@ const VideoView = ({
                 <div className="w-full lg:w-1/2 flex flex-col gap-4 h-fit">
                     {/* Video Info Card */}
                     <div className="card w-full bg-base-300 shadow-2xl overflow-hidden border border-white/5">
-                        <div className="card-body px-6 md:px-8 py-6">
-                            <h2 className="card-title text-2xl text-white mb-0 leading-tight">{activeVideo.title}</h2>
-                            <p className="text-base-content/70 font-bold m-0 mt-1 text-lg">{activeVideo.channel}</p>
+                        <div className="card-body px-4 md:px-8 py-6">
+                            <h2 className="card-title text-xl md:text-2xl text-white mb-0 leading-tight">{activeVideo.title}</h2>
+                            <p className="text-base-content/70 font-bold m-0 mt-1 text-base md:text-lg">{activeVideo.channel}</p>
 
                             {activeVideo.duration && (
                                 <div className="badge badge-primary badge-outline mt-3 px-3 py-3 font-mono font-bold text-sm">
@@ -125,10 +125,10 @@ const VideoView = ({
 
                     {/* Embed Thumbnail Card */}
                     <div className="card w-full bg-base-300 shadow-2xl overflow-hidden border border-white/5">
-                        <div className="card-body px-6 md:px-8 py-6">
-                            <h3 className="card-title text-lg text-white mb-4">Thumbnail Options</h3>
-                            <label className="label cursor-pointer justify-center gap-3 hover:bg-white/5 p-3 rounded-xl transition-colors w-full border border-base-100 bg-base-100/30">
-                                <span className="label-text text-base font-semibold">Embed Thumbnail (Audio)</span>
+                        <div className="card-body px-4 md:px-8 py-6">
+                            <h3 className="card-title text-base md:text-lg text-white mb-4">Thumbnail Options</h3>
+                            <label className="label cursor-pointer justify-between gap-2 hover:bg-white/5 p-2 md:p-3 rounded-xl transition-colors w-full border border-base-100 bg-base-100/30">
+                                <span className="label-text text-[0.7rem] min-[320px]:text-sm md:text-base font-semibold truncate">Embed Thumbnail (Audio)</span>
                                 <input
                                     type="checkbox"
                                     className="toggle toggle-primary toggle-md"
