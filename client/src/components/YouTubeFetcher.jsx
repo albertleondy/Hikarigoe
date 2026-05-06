@@ -2,7 +2,12 @@ import React, { useState } from 'react';
 import VideoTrimmer from './VideoTrimmer';
 import MarqueeTitle from './MarqueeTitle';
 import VideoView from './VideoView';
-import { Play } from 'lucide-react';
+import { Play, Settings2, Cookie, CheckCircle2, AlertCircle, ChevronLeft, ChevronRight, Plus, Check } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 const YouTubeFetcher = ({ addToQueue, queuedVideos, triggerDownload }) => {
     const [url, setUrl] = useState('');
@@ -50,9 +55,8 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos, triggerDownload }) => {
                     body: JSON.stringify({ cookieText: text })
                 });
                 fetchStatus();
-                alert('Cookies updated successfully!');
             } catch (err) {
-                alert('Failed to upload cookies');
+                console.error('Failed to upload cookies');
             }
             setUploading(false);
             e.target.value = null;
@@ -60,18 +64,17 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos, triggerDownload }) => {
         reader.readAsText(file);
     };
 
-    const handleBrowserChange = async (e) => {
-        const browser = e.target.value;
+    const handleBrowserChange = async (val) => {
         setUploading(true);
         try {
             await fetch('http://localhost:3001/api/ytdl/cookie_settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ browser })
+                body: JSON.stringify({ browser: val })
             });
             fetchStatus();
         } catch (err) {
-            alert('Failed to update browser setting');
+            console.error('Failed to update browser setting');
         }
         setUploading(false);
     };
@@ -94,8 +97,6 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos, triggerDownload }) => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to fetch info. Ensure URL is valid.');
             setVideoInfo(data);
-
-            // Fetch recommendations
             fetchRecommendations(data);
         } catch (err) {
             setError(err.message);
@@ -112,7 +113,6 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos, triggerDownload }) => {
             const res = await fetch(`http://localhost:3001/api/ytdl/related?id=${encodeURIComponent(video.id)}&channel=${encodeURIComponent(channel)}`);
             const data = await res.json();
             if (res.ok) {
-                // Filter out the current video from recommendations
                 const filtered = data.filter(v => v.id !== video.id);
                 setRecommendations(filtered.slice(0, 12));
             }
@@ -148,8 +148,6 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos, triggerDownload }) => {
             channel: video.channel,
             url: video.url || `https://www.youtube.com/watch?v=${video.id}`
         });
-
-        // Fetch recommendations for the selected video
         fetchRecommendations(video);
     };
 
@@ -162,118 +160,159 @@ const YouTubeFetcher = ({ addToQueue, queuedVideos, triggerDownload }) => {
     const currentResults = videoInfo && videoInfo.isPlaylist ? videoInfo.videos.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE) : [];
 
     return (
-        <div className="flex flex-col h-full flex-1 min-h-0 animate-fade-in gap-4">
-            <div className="text-center shrink-0">
-                <button
-                    className={`badge badge-lg gap-2 cursor-pointer hover:scale-105 transition-transform ${cookieStatus || browserCookie ? 'badge-success badge-outline' : 'badge-neutral'}`}
+        <div className="flex flex-col h-full flex-1 min-h-0 animate-fade-in gap-6">
+            <div className="flex justify-center shrink-0">
+                <Button
+                    variant="glass"
+                    size="sm"
+                    className={cn(
+                        "rounded-full gap-2 px-4 border shadow-xl transition-all",
+                        (cookieStatus || browserCookie) ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-400" : "border-white/10"
+                    )}
                     onClick={() => setShowSettings(!showSettings)}
                 >
-                    {browserCookie ? `🍪 Browser Cookies: ${browserCookie}` : (cookieStatus ? '🍪 Premium/Cookies Detected' : '⚪ No Cookies Detected')} ⚙️
-                </button>
+                    <Cookie className="w-4 h-4" />
+                    <span className="text-xs font-bold uppercase tracking-widest">
+                        {browserCookie ? `Cookies: ${browserCookie}` : (cookieStatus ? 'Premium Active' : 'No Cookies')}
+                    </span>
+                    <Settings2 className="w-3.5 h-3.5 opacity-50 ml-1" />
+                </Button>
             </div>
 
             {showSettings && (
-                <div className="max-w-2xl mx-auto w-full p-6 bg-base-300/50 backdrop-blur-md border border-white/5 rounded-2xl flex flex-col gap-4 shadow-xl shrink-0">
-                    <h4 className="text-xl font-bold text-white m-0">Cookie Settings</h4>
-                    <p className="text-sm text-base-content/70 m-0">
-                        Providing cookies allows downloading age-restricted or premium content in the highest quality.
-                    </p>
-                    <div className="flex flex-wrap gap-6 items-end">
-                        <div className="flex-1 min-w-[200px] flex flex-col gap-2">
-                            <label className="text-sm font-semibold text-white">Upload cookies.txt</label>
-                            <input type="file" className="file-input file-input-bordered file-input-primary w-full max-w-xs" accept=".txt" onChange={handleFileUpload} disabled={uploading} />
+                <Card className="max-w-2xl mx-auto w-full glass-card border-white/5 shadow-2xl animate-in slide-in-from-top-4">
+                    <CardContent className="p-6 flex flex-col gap-6">
+                        <div className="flex flex-col gap-1">
+                            <h4 className="text-lg font-bold">Cookie Settings</h4>
+                            <p className="text-xs text-muted-foreground">
+                                Use cookies to bypass age restrictions or download premium content in high quality.
+                            </p>
                         </div>
-                        <div className="flex-1 min-w-[200px] flex flex-col gap-2">
-                            <label className="text-sm font-semibold text-white">Or Use Browser Cookies</label>
-                            <select className="select select-bordered select-primary w-full" value={browserCookie} onChange={handleBrowserChange} disabled={uploading}>
-                                <option value="">-- None --</option>
-                                <option value="chrome">Chrome</option>
-                                <option value="edge">Edge</option>
-                                <option value="firefox">Firefox</option>
-                                <option value="zen">Zen Browser</option>
-                                <option value="brave">Brave</option>
-                                <option value="opera">Opera</option>
-                                <option value="safari">Safari</option>
-                                <option value="vivaldi">Vivaldi</option>
-                            </select>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <div className="flex flex-col gap-2">
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Upload cookies.txt</label>
+                                <Input type="file" className="bg-black/20" accept=".txt" onChange={handleFileUpload} disabled={uploading} />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Use Browser Cookies</label>
+                                <select 
+                                    className="flex h-10 w-full rounded-md border border-input bg-black/20 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" 
+                                    value={browserCookie} 
+                                    onChange={(e) => handleBrowserChange(e.target.value)} 
+                                    disabled={uploading}
+                                >
+                                    <option value="">-- None --</option>
+                                    <option value="chrome">Chrome</option>
+                                    <option value="edge">Edge</option>
+                                    <option value="firefox">Firefox</option>
+                                    <option value="zen">Zen Browser</option>
+                                    <option value="brave">Brave</option>
+                                    <option value="opera">Opera</option>
+                                    <option value="safari">Safari</option>
+                                    <option value="vivaldi">Vivaldi</option>
+                                </select>
+                            </div>
                         </div>
-                    </div>
-                </div>
+                    </CardContent>
+                </Card>
             )}
 
-            <form onSubmit={handleInspect} className="max-w-2xl mx-auto w-full flex gap-2 shrink-0 px-2">
-                <input
-                    type="text"
-                    className="input input-bordered input-primary flex-1 shadow-sm text-lg py-2 h-auto"
-                    placeholder="Paste YouTube Link here..."
+            <form onSubmit={handleInspect} className="max-w-2xl mx-auto w-full flex gap-3 shrink-0 px-2">
+                <Input
+                    className="flex-1 bg-black/20 h-12 text-lg border-white/10 focus-visible:ring-primary/50"
+                    placeholder="Enter YouTube Link or Playlist URL..."
                     value={url}
                     onChange={e => setUrl(e.target.value)}
                 />
-                <button type="submit" className="btn btn-primary btn-lg shadow-md shadow-primary/20" disabled={loading}>
-                    {loading ? <span className="loading loading-spinner"></span> : 'Check'}
-                </button>
+                <Button size="lg" disabled={loading} className="px-8 shadow-xl shadow-primary/20">
+                    {loading ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'FETCH'}
+                </Button>
             </form>
 
             {error && (
-                <div className="alert alert-error max-w-2xl mx-auto shadow-lg shrink-0">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <div className="max-w-2xl mx-auto w-full flex items-center gap-3 p-4 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-sm font-medium animate-in fade-in">
+                    <AlertCircle className="w-5 h-5 shrink-0" />
                     <span>{error}</span>
                 </div>
             )}
 
-            <div className={`flex-1 overflow-hidden flex flex-col min-h-0 bg-base-200/30 rounded-3xl border border-white/5 shadow-inner ${videoInfo ? 'p-4' : 'p-0 border-none bg-transparent'}`}>
+            <div className={cn(
+                "flex-1 overflow-hidden flex flex-col min-h-0 rounded-[2.5rem] transition-all",
+                videoInfo ? "bg-card/20 border p-6 shadow-inner" : "bg-transparent border-none p-0"
+            )}>
                 {!videoInfo && (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-                        <div className="max-w-md">
-                            <Play className="w-16 h-16 mx-auto text-base-content/30 mb-4" />
-                            <h3 className="text-xl font-bold text-white mb-2">Ready to Download</h3>
-                            <p className="text-base-content/60">Paste a YouTube link or playlist URL above to get started</p>
-                        </div>
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-8 opacity-20">
+                        <Play className="w-24 h-24 text-muted-foreground mb-6" />
+                        <h3 className="text-2xl font-black tracking-tight">Ready to Fetch</h3>
+                        <p className="text-sm font-medium mt-2">Paste a YouTube link above to start downloading</p>
                     </div>
                 )}
+                
                 {isShowingPlaylist && (
                     <div className="flex flex-col h-full flex-1 overflow-hidden">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto flex-1 min-h-0 auto-rows-min custom-scrollbar pr-2 pb-4 pt-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto flex-1 min-h-0 auto-rows-min custom-scrollbar pr-2 pb-6 pt-2">
                             {currentResults.map(video => {
                                 const inQueue = queuedVideos && queuedVideos.find(v => v.id === video.id);
                                 return (
-                                    <div key={video.id} className="card bg-base-300 shadow-xl cursor-pointer hover:-translate-y-1 hover:shadow-primary/20 hover:border-primary/50 border border-transparent transition-all duration-300 overflow-hidden group h-fit min-h-[250px] sm:min-h-0" onClick={() => handleVideoClick(video)}>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); if (addToQueue) addToQueue({ ...video, url: video.url || `https://www.youtube.com/watch?v=${video.id}` }); }}
-                                            className={`absolute top-2 right-2 btn btn-circle btn-sm z-10 ${inQueue ? 'btn-success text-white pointer-events-none' : 'btn-neutral opacity-0 group-hover:opacity-100'}`}
-                                            title={inQueue ? "In Queue" : "Add to Download Queue"}
-                                        >
-                                            {inQueue ? '✓' : '+'}
-                                        </button>
-                                        <figure className="aspect-video relative w-full min-h-[160px]">
-                                            <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover" />
-                                            {video.duration ? <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs text-white font-mono">{new Date(video.duration * 1000).toISOString().substr(14, 5)}</div> : null}
-                                        </figure>
-                                        <div className="px-3 py-2 flex flex-col justify-center">
-                                            <MarqueeTitle text={video.title} className="font-bold text-sm text-white w-full" />
-                                            <p className="text-xs text-base-content/60 truncate mt-0.5 w-full">{video.channel}</p>
+                                    <Card 
+                                        key={video.id} 
+                                        className="relative group overflow-hidden border-transparent bg-black/20 hover:bg-black/40 hover:border-primary/50 transition-all cursor-pointer h-fit"
+                                        onClick={() => handleVideoClick(video)}
+                                    >
+                                        <div className="aspect-video relative overflow-hidden">
+                                            <img src={video.thumbnail} alt="" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                            {video.duration && (
+                                                <div className="absolute bottom-2 right-2 bg-black/80 px-1.5 py-0.5 rounded text-[10px] font-bold text-white tabular-nums">
+                                                    {new Date(video.duration * 1000).toISOString().substr(14, 5)}
+                                                </div>
+                                            )}
+                                            <Button
+                                                variant={inQueue ? "default" : "secondary"}
+                                                size="icon"
+                                                onClick={(e) => { 
+                                                    e.stopPropagation(); 
+                                                    if (addToQueue) addToQueue({ ...video, url: video.url || `https://www.youtube.com/watch?v=${video.id}` }); 
+                                                }}
+                                                className={cn(
+                                                    "absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg z-10 transition-all",
+                                                    inQueue ? "bg-emerald-500 hover:bg-emerald-500 scale-100" : "opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100"
+                                                )}
+                                            >
+                                                {inQueue ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                                            </Button>
                                         </div>
-                                    </div>
+                                        <div className="p-3">
+                                            <MarqueeTitle text={video.title} className="text-xs font-bold" />
+                                            <p className="text-[10px] text-muted-foreground mt-1 truncate">{video.channel}</p>
+                                        </div>
+                                    </Card>
                                 )
                             })}
                         </div>
+                        
                         {totalPages > 1 && (
-                            <div className="flex justify-center items-center gap-4 mt-4 pt-2 pb-2 shrink-0 border-t border-white/5">
-                                <button
-                                    className="btn btn-sm btn-outline btn-primary"
+                            <div className="flex justify-center items-center gap-6 mt-4 pt-4 border-t border-white/5 shrink-0">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-full"
                                     disabled={currentPage === 1}
                                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                                 >
-                                    Previous
-                                </button>
-                                <span className="text-sm font-medium text-base-content/70">Page {currentPage} of {totalPages} ({videoInfo.videos.length} items)</span>
-                                <button
-                                    className="btn btn-sm btn-outline btn-primary"
+                                    <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+                                </Button>
+                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                                    Page {currentPage} of {totalPages}
+                                </span>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-full"
                                     disabled={currentPage === totalPages}
                                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                 >
-                                    Next
-                                </button>
+                                    Next <ChevronRight className="w-4 h-4 ml-1" />
+                                </Button>
                             </div>
                         )}
                     </div>

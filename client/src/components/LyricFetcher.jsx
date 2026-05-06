@@ -1,4 +1,10 @@
 import React, { useState } from 'react';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Search, Music2, Copy, Download, ChevronLeft, Sparkles, Send } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const LyricFetcher = ({ queuedVideos = [], onAssignLyrics }) => {
     const [query, setQuery] = useState('');
@@ -79,66 +85,77 @@ const LyricFetcher = ({ queuedVideos = [], onAssignLyrics }) => {
         };
         onAssignLyrics(videoId, payload);
         setShowQueuePicker(false);
-        alert('Lyrics assigned to video!');
     };
 
     return (
         <div className="flex flex-col md:flex-row gap-6 h-full min-h-0 animate-fade-in w-full">
             {/* LEFT PANEL: SEARCH & LIST */}
-            <div className={`w-full md:w-1/3 flex-col gap-4 bg-base-200/40 border border-white/5 rounded-[2rem] p-4 md:p-5 shadow-inner shrink-0 ${selectedLyrics ? 'hidden md:flex' : 'flex'}`}>
+            <div className={cn(
+                "w-full md:w-80 lg:w-96 flex flex-col gap-4 bg-card/20 border rounded-3xl p-5 shadow-inner shrink-0",
+                selectedLyrics && "hidden md:flex"
+            )}>
                 <form onSubmit={handleSearch} className="flex gap-2 w-full shrink-0">
-                    <input
-                        type="text"
-                        className="input input-bordered input-primary flex-1 shadow-sm"
-                        placeholder="Enter song title..."
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                    />
-                    <button type="submit" className="btn btn-primary shadow-md shadow-primary/20" disabled={loadingSearch}>
-                        {loadingSearch ? <span className="loading loading-spinner loading-sm"></span> : 'Search'}
-                    </button>
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                            className="pl-9 bg-black/20"
+                            placeholder="Find lyrics..."
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                        />
+                    </div>
+                    <Button type="submit" disabled={loadingSearch} className="shadow-lg shadow-primary/20">
+                        {loadingSearch ? <span className="animate-spin mr-2">◌</span> : "Search"}
+                    </Button>
                 </form>
 
-                <div className="flex-1 overflow-y-auto flex flex-col gap-3 pr-2 custom-scrollbar">
-                    {error && <div className="alert alert-error text-sm shadow-md shrink-0 py-2">{error}</div>}
+                <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1 custom-scrollbar">
+                    {error && (
+                        <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs">
+                            {error}
+                        </div>
+                    )}
 
                     {searchResults.length === 0 && !loadingSearch && (
-                        <div className="text-center text-base-content/50 italic mt-10">
-                            Search for a song to see results here.
+                        <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-30 gap-3 mt-10">
+                            <Music2 className="w-12 h-12" />
+                            <p className="text-sm font-medium">Search for a song</p>
                         </div>
                     )}
 
                     {searchResults.map((song) => (
-                        <div
+                        <Card
                             key={`${song.source}-${song.id}`}
-                            className="bg-base-300/50 hover:bg-base-300 border border-transparent hover:border-primary/50 transition-all duration-200 rounded-xl p-3 cursor-pointer flex justify-between items-center group shadow-sm hover:shadow-primary/10"
+                            className="bg-transparent hover:bg-white/[0.03] border-transparent hover:border-border/50 transition-all cursor-pointer group"
                             onClick={() => handleSelectSong(song)}
                         >
-                            <div className="flex-1 min-w-0 pr-3">
-                                <div className="font-bold text-white text-md truncate group-hover:text-primary transition-colors">{song.name}</div>
-                                <div className="text-sm text-base-content/70 truncate">{song.artist}</div>
-                                <div className="text-xs text-base-content/50 truncate mt-1">{song.album}</div>
-                            </div>
-                            <div className="shrink-0 flex items-center">
-                                <span className={`badge badge-sm uppercase font-bold tracking-wider ${song.source.toLowerCase() === 'netease' ? 'badge-error badge-outline' : 'badge-success badge-outline'}`}>
+                            <div className="p-3 flex justify-between items-center">
+                                <div className="flex-1 min-w-0 pr-3">
+                                    <div className="font-bold text-sm truncate group-hover:text-primary transition-colors">{song.name}</div>
+                                    <div className="text-xs text-muted-foreground truncate">{song.artist}</div>
+                                </div>
+                                <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">
                                     {song.source}
-                                </span>
+                                </Badge>
                             </div>
-                        </div>
+                        </Card>
                     ))}
                 </div>
             </div>
 
             {/* RIGHT PANEL: LYRICS DISPLAY */}
-            <div className={`w-full md:w-2/3 flex-col bg-base-300/80 backdrop-blur-md rounded-[2rem] shadow-2xl border border-white/5 overflow-hidden relative ${!selectedLyrics && !loadingLyrics ? 'hidden md:flex' : 'flex'}`}>
+            <div className={cn(
+                "flex-1 flex flex-col bg-card/40 backdrop-blur-md rounded-3xl shadow-2xl border overflow-hidden relative",
+                !selectedLyrics && !loadingLyrics && "hidden md:flex"
+            )}>
                 {loadingLyrics ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-base-300/50 backdrop-blur-sm z-10 transition-all">
-                        <span className="loading loading-ring loading-lg text-primary"></span>
-                        <p className="font-medium text-primary tracking-widest animate-pulse">Fetching & Converting Lyrics...</p>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-10">
+                        <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+                        <p className="text-sm font-medium text-primary tracking-widest animate-pulse">Converting to Romaji...</p>
                     </div>
                 ) : selectedLyrics ? (
                     <div
-                        className="flex flex-col h-full items-center p-4 md:p-6 animate-fade-in relative group"
+                        className="flex flex-col h-full items-center p-6 md:p-8 animate-fade-in relative group"
                         draggable
                         onDragStart={(e) => {
                             const lrcContent = selectedLyrics.lyrics.map(l => `${l.timestamp} ${l.romaji}`).join('\n');
@@ -147,102 +164,102 @@ const LyricFetcher = ({ queuedVideos = [], onAssignLyrics }) => {
                                 raw: lrcContent
                             };
                             e.dataTransfer.setData('application/json', JSON.stringify(payload));
-                            e.dataTransfer.effectAllowed = 'copy';
                         }}
                         style={{ cursor: 'grab' }}
-                        title="Drag me into a video in your Download Queue!"
                     >
-                        <div className="w-full flex justify-between items-start mb-2 md:mb-0 shrink-0">
-                            <button
-                                className="btn btn-ghost btn-sm md:hidden text-base-content/60"
+                        <div className="w-full flex items-center justify-between mb-6 shrink-0">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="md:hidden"
                                 onClick={() => setSelectedLyrics(null)}
                             >
-                                ← Back
-                            </button>
-                            <div className="hidden md:flex absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-primary/20 text-primary px-3 py-1 text-xs rounded-full font-bold items-center gap-2">
-                                <span className="animate-bounce">↑</span> Drag to Queue
+                                <ChevronLeft className="w-4 h-4 mr-1" /> Back
+                            </Button>
+                            
+                            <div className="flex-1 text-center px-4">
+                                <h2 className="text-2xl md:text-4xl font-black text-gradient tracking-tight">{selectedLyrics.song}</h2>
+                                <h3 className="text-sm md:text-lg text-muted-foreground font-medium mt-1">{selectedLyrics.artist}</h3>
+                            </div>
+
+                            <div className="hidden md:flex items-center gap-2 text-[10px] font-bold text-primary bg-primary/10 px-3 py-1 rounded-full animate-pulse shrink-0">
+                                <Sparkles className="w-3 h-3" />
+                                <span>DRAG TO QUEUE</span>
                             </div>
                         </div>
 
-                        <div className="text-center border-b border-white/10 pb-4 w-full shrink-0 mt-2 md:mt-0">
-                            <h2 className="text-2xl md:text-3xl font-bold text-white m-0 tracking-tight">{selectedLyrics.song}</h2>
-                            <h3 className="text-md md:text-lg text-base-content/70 m-0 mt-1">{selectedLyrics.artist}</h3>
-                            <div className="mt-3 flex flex-col items-center gap-2">
-                                <span className="badge badge-neutral shadow-sm">Source: {selectedLyrics.source}</span>
-                                <p className="text-xs font-semibold text-secondary animate-pulse m-0 bg-secondary/10 px-3 py-1 rounded-full">
-                                    ✨ Drag this card into your queue to embed! ✨
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex-1 w-full overflow-y-auto px-4 py-6 text-center text-lg leading-relaxed relative custom-scrollbar">
+                        <div className="flex-1 w-full overflow-y-auto px-4 md:px-12 py-8 text-center space-y-8 custom-scrollbar">
                             {selectedLyrics.lyrics.map((line, index) => (
-                                <div key={index} className="mb-6 hover:bg-white/5 rounded-lg py-1 transition-colors">
-                                    {line.romaji && <div className="text-primary font-medium">{line.romaji}</div>}
-                                    {line.original && <div className="text-white/90 text-xl font-bold">{line.original}</div>}
-                                    {!line.original && !line.romaji && <div className="h-6"></div>}
+                                <div key={index} className="group/line relative hover:bg-white/[0.02] rounded-2xl py-2 transition-all">
+                                    {line.romaji && <div className="text-primary text-sm md:text-base font-bold mb-1 opacity-70 group-hover/line:opacity-100 transition-opacity">{line.romaji}</div>}
+                                    {line.original && <div className="text-xl md:text-3xl font-bold tracking-tight">{line.original}</div>}
+                                    {!line.original && !line.romaji && <div className="h-8"></div>}
                                 </div>
                             ))}
                         </div>
 
-                        <div className="flex flex-wrap gap-2 w-full shrink-0 justify-center pt-4 border-t border-white/10">
-                            <button
-                                className="btn btn-outline btn-sm md:btn-md hover:text-white"
+                        <div className="flex flex-wrap gap-3 w-full shrink-0 justify-center pt-6 border-t mt-4">
+                            <Button
+                                variant="outline"
+                                className="rounded-full gap-2"
                                 onClick={() => navigator.clipboard.writeText(selectedLyrics.lyrics.map(l => `${l.timestamp} ${l.romaji}`).join('\n'))}
                             >
-                                Copy
-                            </button>
+                                <Copy className="w-4 h-4" /> Copy
+                            </Button>
 
                             {queuedVideos.length > 0 && (
-                                <button
-                                    className="btn btn-secondary btn-sm md:btn-md shadow-lg shadow-secondary/20"
+                                <Button
+                                    variant="secondary"
+                                    className="rounded-full gap-2 shadow-lg shadow-secondary/10"
                                     onClick={() => setShowQueuePicker(true)}
                                 >
-                                    Apply to Queue
-                                </button>
+                                    <Send className="w-4 h-4" /> Apply
+                                </Button>
                             )}
 
-                            <button
-                                className="btn btn-primary btn-sm md:btn-md shadow-lg shadow-primary/20"
+                            <Button
+                                className="rounded-full gap-2 shadow-lg shadow-primary/20"
                                 onClick={handleDownload}
                             >
-                                Download .lrc
-                            </button>
+                                <Download className="w-4 h-4" /> Save .lrc
+                            </Button>
                         </div>
 
                         {/* MOBILE QUEUE PICKER OVERLAY */}
                         {showQueuePicker && (
-                            <div className="absolute inset-0 bg-base-300/95 backdrop-blur-md z-50 flex flex-col p-6 animate-fade-in">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h3 className="text-xl font-bold text-white">Select Video</h3>
-                                    <button className="btn btn-circle btn-ghost" onClick={() => setShowQueuePicker(false)}>×</button>
+                            <div className="absolute inset-0 bg-background/95 backdrop-blur-xl z-50 flex flex-col p-8 animate-in fade-in slide-in-from-bottom-5">
+                                <div className="flex justify-between items-center mb-8">
+                                    <h3 className="text-2xl font-bold">Select Target</h3>
+                                    <Button variant="ghost" size="icon" onClick={() => setShowQueuePicker(false)}>
+                                        <X className="w-6 h-6" />
+                                    </Button>
                                 </div>
                                 <div className="flex-1 overflow-y-auto flex flex-col gap-3 custom-scrollbar">
                                     {queuedVideos.map(video => (
-                                        <div
+                                        <Card
                                             key={video.id}
-                                            className="flex items-center gap-3 bg-white/5 hover:bg-white/10 p-3 rounded-xl cursor-pointer transition-colors border border-white/5 hover:border-primary/50"
+                                            className="hover:border-primary transition-colors cursor-pointer"
                                             onClick={() => handleAssignToVideo(video.id)}
                                         >
-                                            <img src={video.thumbnail} alt="" className="w-16 h-10 object-cover rounded-md" />
-                                            <div className="flex-1 min-w-0">
-                                                <div className="font-bold text-white text-sm truncate">{video.title}</div>
-                                                <div className="text-xs text-base-content/60">{video.channel}</div>
+                                            <div className="p-3 flex items-center gap-4">
+                                                <img src={video.thumbnail} alt="" className="w-20 h-12 object-cover rounded-lg" />
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-bold text-sm truncate">{video.title}</div>
+                                                    <div className="text-xs text-muted-foreground">{video.channel}</div>
+                                                </div>
+                                                {video.lyricsPayload && <Badge variant="primary" className="h-5">✓</Badge>}
                                             </div>
-                                            {video.lyricsPayload && <span className="badge badge-primary badge-xs">Has Lyrics</span>}
-                                        </div>
+                                        </Card>
                                     ))}
                                 </div>
-                                <button className="btn btn-neutral mt-6" onClick={() => setShowQueuePicker(false)}>Cancel</button>
+                                <Button variant="secondary" className="mt-8" onClick={() => setShowQueuePicker(false)}>Cancel</Button>
                             </div>
                         )}
                     </div>
                 ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-base-content/40 italic">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 mb-4 opacity-20">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 19.5V15a2.25 2.25 0 012.25-2.25H15M9 19.5a2.25 2.25 0 002.25 2.25H15M9 19.5L5.25 15.75M15 21.75a2.25 2.25 0 002.25-2.25V15a2.25 2.25 0 00-2.25-2.25h-3.75" />
-                        </svg>
-                        <p>Select a song from the list to view lyrics</p>
+                    <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-5 opacity-20">
+                        <Music2 className="w-24 h-24" />
+                        <p className="text-xl font-bold tracking-tight">Select a song to view lyrics</p>
                     </div>
                 )}
             </div>
