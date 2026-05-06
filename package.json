@@ -5,6 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "node server.js",
+    "dev:all": "concurrently \"node server.js\" \"npm run dev --prefix client\"",
+    "start:prod": "npm run build:client && node server.js",
     "electron:start": "npm run build:client && npx electron .",
     "build:client": "cd client && npm install && npm run build",
     "dist": "npm run build:client && npx electron-builder",
@@ -46,6 +48,7 @@
     "yt-dlp-wrap": "^2.3.12"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "electron": "^40.2.1",
     "electron-builder": "^26.7.0"
   }
