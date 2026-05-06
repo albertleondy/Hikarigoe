@@ -69,10 +69,12 @@ function App() {
     iframe.src = downloadUrl;
     document.body.appendChild(iframe);
 
-    // Clean up iframe after a while
+    // Clean up iframe after a while (long timeout to prevent aborted requests)
     setTimeout(() => {
-      document.body.removeChild(iframe);
-    }, 30000);
+      if (document.body.contains(iframe)) {
+        document.body.removeChild(iframe);
+      }
+    }, 600000); // 10 minutes
   };
 
   const startPolling = (jobId) => {

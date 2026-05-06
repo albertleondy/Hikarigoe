@@ -724,17 +724,33 @@ app.get('/api/ytdl/download', async (req, res) => {
         }
 
         downloadProgress.set(currentJobId, { ...downloadProgress.get(currentJobId), status: 'Completing', progress: 100 });
+        
+        if (res.destroyed) {
+            console.log("⚠️ Client disconnected before download could start. Cleaning up...");
+            try { fs.unlinkSync(fullPath); } catch (e) { }
+            downloadProgress.delete(currentJobId);
+            return;
+        }
+
         console.log(`Sending file: ${fullPath} as ${finalFilename}`);
         res.download(fullPath, finalFilename, (err) => {
-            if (err) console.error("Send file error:", err);
+            if (err) {
+                if (err.code === 'ECONNABORTED' || res.destroyed) {
+                    console.log(`ℹ️ Download aborted by client: ${finalFilename}`);
+                } else {
+                    console.error("Send file error:", err);
+                }
+            }
             // Clean up progress after a short delay to allow client to see 100%
             setTimeout(() => {
                 downloadProgress.delete(currentJobId);
             }, 5000);
 
             try {
-                fs.unlinkSync(fullPath);
-                console.log("Temp file deleted.");
+                if (fs.existsSync(fullPath)) {
+                    fs.unlinkSync(fullPath);
+                    console.log("Temp file deleted.");
+                }
             } catch (e) {
                 console.error("Cleanup failed:", e);
             }
