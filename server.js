@@ -333,7 +333,15 @@ const ytDlpWrap = new YTDlpWrap();
             fs.chmodSync(ytDlpBinaryPath, '755');
             console.log("yt-dlp downloaded successfully.");
         } else {
-            console.log("Local yt-dlp found.");
+            console.log("Local yt-dlp found. Checking for updates...");
+            try {
+                const tempWrap = new YTDlpWrap();
+                tempWrap.setBinaryPath(ytDlpBinaryPath);
+                const updateOutput = await tempWrap.execPromise(['-U']);
+                console.log("yt-dlp update status:", updateOutput.trim().replace(/\n/g, ' '));
+            } catch (updateError) {
+                console.log("Failed to auto-update yt-dlp (continuing with existing):", updateError.message);
+            }
         }
 
         // Update the wrap instance to use this path

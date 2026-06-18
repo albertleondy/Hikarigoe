@@ -18,11 +18,13 @@ function App() {
   const [queuedVideos, setQueuedVideos] = useState([]);
   const [queueEmbedThumbnail, setQueueEmbedThumbnail] = useState(false);
   const [externalSelectedVideo, setExternalSelectedVideo] = useState(null);
+  const [previewId, setPreviewId] = useState(null);
 
   // Download & Progress State
-  const [downloadJob, setDownloadJob] = useState(null);
+  const [downloadJobs, setDownloadJobs] = useState([]);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const pollingInterval = useRef(null);
+  const isQueueDownloading = useRef(false);
 
   // Mobile Menu State
   const [isQueueOpen, setIsQueueOpen] = useState(false);
@@ -43,8 +45,7 @@ function App() {
     ));
   };
 
-  const triggerDownload = (url, type, options = {}) => {
-    const clientJobId = 'job_' + Math.random().toString(36).substring(2, 11);
+  const triggerDownloadWithJobId = (url, type, clientJobId, options = {}) => {
     const { embedThumbnail, jobId, startTime, endTime } = options;
 
     let downloadUrl = `http://localhost:3001/api/ytdl/download?url=${encodeURIComponent(url)}&type=${type}&clientJobId=${clientJobId}`;
@@ -54,16 +55,6 @@ function App() {
     if (endTime !== undefined) downloadUrl += `&endTime=${endTime}`;
 
     console.log('Initiating download:', downloadUrl);
-
-    setDownloadJob({
-      id: clientJobId,
-      status: 'Connecting...',
-      progress: 0,
-      title: 'Requesting server...'
-    });
-    setIsDownloadModalOpen(true);
-
-    startPolling(clientJobId);
 
     const iframe = document.createElement('iframe');
     iframe.style.display = 'none';
@@ -77,6 +68,28 @@ function App() {
     }, 600000);
   };
 
+  const triggerDownload = (url, type, options = {}) => {
+    const clientJobId = 'job_' + Math.random().toString(36).substring(2, 11);
+    
+    const matchedVideo = queuedVideos.find(v => v.url === url || v.id === url.match(/[?&]v=([^&]+)/)?.[1]);
+
+    const newJob = {
+      id: clientJobId,
+      video: matchedVideo || null,
+      status: 'Connecting...',
+      progress: 0,
+      title: matchedVideo?.title || 'Requesting server...',
+      eta: '',
+      speed: ''
+    };
+
+    setDownloadJobs([newJob]);
+    setIsDownloadModalOpen(true);
+
+    triggerDownloadWithJobId(url, type, clientJobId, options);
+    startPolling(clientJobId);
+  };
+
   const startPolling = (jobId) => {
     if (pollingInterval.current) clearInterval(pollingInterval.current);
 
@@ -85,7 +98,7 @@ function App() {
         const res = await fetch(`http://localhost:3001/api/ytdl/progress/${jobId}`);
         if (res.ok) {
           const data = await res.json();
-          setDownloadJob(data);
+          setDownloadJobs(prev => prev.map(j => j.id === jobId ? { ...j, ...data } : j));
 
           if (data.status === 'Completing' || data.status.startsWith('Error')) {
             clearInterval(pollingInterval.current);
@@ -105,6 +118,7 @@ function App() {
 
   const closeDownloadModal = () => {
     setIsDownloadModalOpen(false);
+    isQueueDownloading.current = false;
     if (pollingInterval.current) {
       clearInterval(pollingInterval.current);
       pollingInterval.current = null;
@@ -112,7 +126,30 @@ function App() {
   };
 
   const downloadAll = async (type) => {
-    for (const video of queuedVideos) {
+    isQueueDownloading.current = true;
+
+    // Generate job objects for all items in the queue
+    const initialJobs = queuedVideos.map(video => ({
+      id: 'job_' + Math.random().toString(36).substring(2, 11),
+      video,
+      status: 'Waiting...',
+      progress: 0,
+      title: video.title,
+      eta: '',
+      speed: ''
+    }));
+
+    setDownloadJobs(initialJobs);
+    setIsDownloadModalOpen(true);
+
+    for (let i = 0; i < initialJobs.length; i++) {
+      if (!isQueueDownloading.current) break;
+
+      const job = initialJobs[i];
+      const { video, id: clientJobId } = job;
+
+      setDownloadJobs(prev => prev.map(j => j.id === clientJobId ? { ...j, status: 'Connecting...' } : j));
+
       let lyricsJobId = '';
       if (video.lyricsPayload) {
         try {
@@ -128,22 +165,46 @@ function App() {
         }
       }
 
-      triggerDownload(video.url, type, {
+      if (!isQueueDownloading.current) break;
+
+      triggerDownloadWithJobId(video.url, type, clientJobId, {
         embedThumbnail: queueEmbedThumbnail,
         jobId: lyricsJobId
       });
 
+      // Poll this specific job until it completes or errors out
       await new Promise(resolve => {
-        const check = setInterval(() => {
-          if (!pollingInterval.current) {
-            clearInterval(check);
+        const poll = setInterval(async () => {
+          if (!isQueueDownloading.current) {
+            clearInterval(poll);
+            resolve();
+            return;
+          }
+
+          try {
+            const res = await fetch(`http://localhost:3001/api/ytdl/progress/${clientJobId}`);
+            if (res.ok) {
+              const data = await res.json();
+              setDownloadJobs(prev => prev.map(j => j.id === clientJobId ? { ...j, ...data } : j));
+
+              if (data.status === 'Completing' || data.status.startsWith('Error')) {
+                clearInterval(poll);
+                resolve();
+              }
+            }
+          } catch (err) {
+            console.error("Polling error:", err);
+            clearInterval(poll);
             resolve();
           }
-        }, 500);
+        }, 1000);
       });
 
+      if (!isQueueDownloading.current) break;
       await new Promise(r => setTimeout(r, 1000));
     }
+
+    isQueueDownloading.current = false;
   };
 
   const handleDrop = (e, videoId) => {
@@ -283,8 +344,30 @@ function App() {
                 }}
               >
                 <div className="p-3 flex items-center gap-3">
-                  <div className="relative w-16 h-10 shrink-0 rounded-md overflow-hidden shadow-md">
+                  <div className="relative w-16 h-10 shrink-0 rounded-md overflow-hidden shadow-md group/thumb">
                     <img src={video.thumbnail} alt="" className="w-full h-full object-cover" />
+                    <Button 
+                      variant="primary" 
+                      size="icon" 
+                      className={cn(
+                        "absolute inset-0 w-full h-full bg-black/40 opacity-0 group-hover/thumb:opacity-100 transition-opacity rounded-none border-none",
+                        previewId === video.id && "opacity-100 bg-primary/20"
+                      )}
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        setPreviewId(previewId === video.id ? null : video.id); 
+                      }}
+                    >
+                      {previewId === video.id ? (
+                        <div className="flex gap-0.5 items-end h-3">
+                          <div className="w-1 bg-white animate-bounce" style={{ animationDuration: '0.5s' }} />
+                          <div className="w-1 bg-white animate-bounce" style={{ animationDuration: '0.8s' }} />
+                          <div className="w-1 bg-white animate-bounce" style={{ animationDuration: '0.6s' }} />
+                        </div>
+                      ) : (
+                        <Play className="w-4 h-4 text-white fill-white" />
+                      )}
+                    </Button>
                   </div>
                   <div className="flex-1 min-w-0">
                     <MarqueeTitle text={video.title} className="text-sm font-bold" />
@@ -321,6 +404,22 @@ function App() {
           )}
         </div>
 
+        {previewId && (
+          <div className="px-4 py-2 bg-primary/10 border-t border-primary/20 flex items-center justify-between animate-in slide-in-from-bottom-2">
+            <div className="flex items-center gap-2 overflow-hidden">
+              <div className="flex gap-0.5 items-end h-2 shrink-0">
+                <div className="w-0.5 h-full bg-primary animate-bounce" style={{ animationDuration: '0.5s' }} />
+                <div className="w-0.5 h-full bg-primary animate-bounce" style={{ animationDuration: '0.8s' }} />
+                <div className="w-0.5 h-full bg-primary animate-bounce" style={{ animationDuration: '0.6s' }} />
+              </div>
+              <span className="text-[10px] font-bold text-primary uppercase tracking-widest truncate">Previewing Audio...</span>
+            </div>
+            <Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-primary/20" onClick={() => setPreviewId(null)}>
+              <X className="w-3 h-3 text-primary" />
+            </Button>
+          </div>
+        )}
+
         <div className="p-5 border-t bg-card/30 flex flex-col gap-4">
           <div className="flex items-center justify-between px-1">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Embed Thumb</span>
@@ -340,7 +439,20 @@ function App() {
         </div>
       </aside>
 
-      <DownloadModal isOpen={isDownloadModalOpen} jobData={downloadJob} onClose={closeDownloadModal} />
+      <DownloadModal isOpen={isDownloadModalOpen} jobs={downloadJobs} onClose={closeDownloadModal} />
+
+      {/* Hidden Preview Player */}
+      {previewId && (
+        <iframe
+          width="1"
+          height="1"
+          src={`https://www.youtube.com/embed/${previewId}?autoplay=1`}
+          title="Audio Preview"
+          frameBorder="0"
+          allow="autoplay"
+          className="hidden"
+        ></iframe>
+      )}
     </div>
   );
 }
